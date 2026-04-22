@@ -12,8 +12,10 @@ WARN_COUNT=0
 
 pass() { printf '  [PASS] %s\n' "$*"; PASS_COUNT=$((PASS_COUNT + 1)); }
 fail() { printf '  [FAIL] %s\n' "$*"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
-# shellcheck disable=SC2329  # warn() retained as a helper for future checks; all current checks are strict PASS/FAIL
-warn() { printf '  [WARN] %s\n' "$*"; WARN_COUNT=$((WARN_COUNT + 1)); }
+# NOTE: warn()/WARN_COUNT intentionally removed when item 6 was promoted from
+# WARN to FAIL in v0.3.0. All current checks are strict PASS/FAIL. Re-introduce
+# warn() as needed for future non-blocking checks. WARN_COUNT is retained in
+# the summary output for backward compatibility with consumers that parsed it.
 
 echo "[verify-tier1] 6-item smoke test"
 echo

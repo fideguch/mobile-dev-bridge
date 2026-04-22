@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moshi webhook / push notification bridge (event names only)
 - Upgrade review protocol (annual)
 
+## [0.3.1] — 2026-04-23 — CI hotfix
+
+### Fixed
+- `scripts/verify-tier1.sh`: removed unused `warn()` helper that tripped ShellCheck 0.9.0 (on ubuntu-latest CI) with SC2317 "Command appears to be unreachable". Local ShellCheck 0.11.0 used the different code SC2329, which is why the local pre-push lint missed the CI failure. The function had been retained with a `# shellcheck disable=SC2329` directive in v0.3.0 after the item-6 WARN→FAIL promotion; this release removes it entirely and documents the rationale as a comment. No functional change — `WARN_COUNT` is still emitted in the summary for parser compatibility.
+
+### Notes
+- v0.3.0 code is fully functional end-to-end (verify-tier1.sh 6/6 PASS, LaunchAgent loads, pmset shows 3 assertions). The CI failure was a linter-version discrepancy, not a runtime defect.
+- Action items recorded for next session: pin ShellCheck version in CI to eliminate local-vs-CI drift.
+
 ## [0.3.0] — 2026-04-23 — **Phase 1.5: caffeinate LaunchAgent automation** 🎉
 
 Forward-promoted from Phase 2 due to real-world bug: Mac going to sleep between sessions broke iPhone SSH access. Phase 1 required the user to manually `caffeinate -d &` before closing the lid and lose access whenever they forgot. Phase 1.5 makes Mac "awake 24/7" idempotent and automatic.
