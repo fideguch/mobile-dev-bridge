@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moshi webhook / push notification bridge (event names only)
 - Upgrade review protocol (annual)
 
+## [0.1.2] — 2026-04-22
+
+### Fixed
+- **scripts/verify-tier1.sh**: mosh-server loopback test (layer 2) was flaky on some Macs. The previous `head -1 | grep -q 'MOSH CONNECT'` failed when `2>&1` merged stderr (version banner) ahead of stdout (MOSH CONNECT line) due to flush-timing differences. Replaced with a bounded read of 8 lines followed by a full-output grep, and surfaced the actual first line in the fail message for future debugging. Fix validated via gatekeeper HG-3 (facts first) on affected Mac: 3/3 PASS after fix, 0/3 PASS before.
+
 ## [0.1.1] — 2026-04-22
 
 Polish round addressing findings from the 4-agent forge_ace review (Guardian / Overseer / PM-Admin / Designer).
