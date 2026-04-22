@@ -1,4 +1,4 @@
-name: shellcheck
+name: lint
 
 on:
   push:
@@ -19,3 +19,30 @@ jobs:
 
       - name: Run shellcheck on scripts
         run: shellcheck scripts/*.sh install.sh uninstall.sh
+
+  plist-lint:
+    name: xmllint templates/*.plist*
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: Validate plist template(s)
+        # The template contains __HOME__ placeholders; xmllint treats them as
+        # plain strings (no substitution required for XML well-formedness).
+        # plutil (macOS-only) does the same validation during `--apply`.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          plists=(templates/*.plist templates/*.plist.template)
+          if [ ${#plists[@]} -eq 0 ]; then
+            echo "No plist files to validate."
+            exit 0
+          fi
+          for p in "${plists[@]}"; do
+            echo "Linting $p"
+            xmllint --noout "$p"
+          done

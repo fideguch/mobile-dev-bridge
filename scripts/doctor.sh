@@ -12,7 +12,7 @@ if [ ! -x "${VERIFY_SCRIPT}" ]; then
 fi
 
 echo "══════════════════════════════════════════════════════════════════════"
-echo " mobile-dev-bridge doctor — 6-layer diagnostic"
+echo " mobile-dev-bridge doctor — 7-layer diagnostic"
 echo "══════════════════════════════════════════════════════════════════════"
 echo
 
@@ -27,7 +27,7 @@ set -e
 
 echo
 echo "══════════════════════════════════════════════════════════════════════"
-echo " Remediation hints (6 layers — README §0 metaphor)"
+echo " Remediation hints (7 layers — README §0 metaphor)"
 echo "══════════════════════════════════════════════════════════════════════"
 
 # NOTE: the grep patterns below rely on verify-tier1.sh output ordering
@@ -97,16 +97,33 @@ L5 🤖 AI — Claude Code CLI FAIL:
 HINT_L5
 fi
 
-# L6: Termius 📱 窓 (iOS-side, can only give advice here)
-cat <<'HINT_L6'
+# L6: caffeinate LaunchAgent 💤 Sleep guard (Phase 1.5 gate)
+if grep -q '6) caffeinate LaunchAgent' "${TMP_OUT}" && grep -A1 '6) caffeinate LaunchAgent' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<HINT_CAFFEINATE
 
-L6 📱 窓 — Termius (iOS-side):
+L6 💤 Sleep guard — caffeinate LaunchAgent FAIL:
+  - Install:        ./scripts/setup-caffeinate-launchd.sh --apply
+  - Dry-run first:  ./scripts/setup-caffeinate-launchd.sh
+  - Status check:   ./scripts/setup-caffeinate-launchd.sh --status
+  - launchctl:      launchctl print gui/$(id -u)/com.mobile-dev-bridge.caffeinate
+  - pmset proof:    pmset -g assertions | grep 'caffeinate.*asserting forever'
+  - Uninstall:      ./scripts/setup-caffeinate-launchd.sh --uninstall
+  Without this, the Mac sleeps and iPhone SSH/mosh connections fail silently.
+  See references/setup-tier1.md §8 (lid-closed / Apple Silicon caveats) and
+  references/troubleshooting.md §L6.
+HINT_CAFFEINATE
+fi
+
+# L7: Termius 📱 窓 (iOS-side, can only give advice here)
+cat <<'HINT_L7'
+
+L7 📱 窓 — Termius (iOS-side):
   - Termius cannot be inspected from the Mac. If Mosh is not an option in
     the Termius Host edit screen, your Free-tier may no longer include Mosh.
   - Fallback: use plain SSH + tmux attach. Add 'ssh user@host -t "tmux attach"' as a Termius snippet.
   - Alternative client: install Moshi (Free) on iOS as Secondary.
-  See references/troubleshooting.md §L6 and references/setup-tier1.md §4.
-HINT_L6
+  See references/troubleshooting.md §L7 and references/setup-tier1.md §4.
+HINT_L7
 
 echo
 echo "══════════════════════════════════════════════════════════════════════"

@@ -12,6 +12,7 @@ WARN_COUNT=0
 
 pass() { printf '  [PASS] %s\n' "$*"; PASS_COUNT=$((PASS_COUNT + 1)); }
 fail() { printf '  [FAIL] %s\n' "$*"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
+# shellcheck disable=SC2329  # warn() retained as a helper for future checks; all current checks are strict PASS/FAIL
 warn() { printf '  [WARN] %s\n' "$*"; WARN_COUNT=$((WARN_COUNT + 1)); }
 
 echo "[verify-tier1] 6-item smoke test"
@@ -98,16 +99,17 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# 6. caffeinate LaunchAgent (Phase 2 scope; WARN-only in Phase 1)
+# 6. caffeinate LaunchAgent (Phase 1.5: keeps Mac awake 24/7 for remote SSH)
 # ──────────────────────────────────────────────────────────────────────────
-echo "6) caffeinate LaunchAgent (Phase 2, WARN-only in Phase 1)"
+echo "6) caffeinate LaunchAgent (Phase 1.5)"
 LAUNCHAGENT_PLIST="${HOME}/Library/LaunchAgents/com.mobile-dev-bridge.caffeinate.plist"
-if [ -f "${LAUNCHAGENT_PLIST}" ] && launchctl list 2>/dev/null | grep -q 'com.mobile-dev-bridge.caffeinate'; then
-  pass "caffeinate LaunchAgent loaded"
+SERVICE_TARGET="gui/$(id -u)/com.mobile-dev-bridge.caffeinate"
+if [ -f "${LAUNCHAGENT_PLIST}" ] && launchctl print "${SERVICE_TARGET}" >/dev/null 2>&1; then
+  pass "caffeinate LaunchAgent loaded (${SERVICE_TARGET})"
 elif command -v caffeinate >/dev/null 2>&1; then
-  warn "caffeinate binary exists but no LaunchAgent. Manual workaround: 'caffeinate -d &'. Phase 2 will automate."
+  fail "caffeinate LaunchAgent not installed. Run: ./scripts/setup-caffeinate-launchd.sh --apply"
 else
-  warn "caffeinate not found (unusual on macOS). Phase 2 will address."
+  fail "caffeinate binary missing. Reinstall Xcode Command Line Tools."
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -119,5 +121,5 @@ if [ "${FAIL_COUNT}" -gt 0 ]; then
   echo "[verify-tier1] Overall: FAIL. Run ./scripts/doctor.sh for remediation hints."
   exit 1
 fi
-echo "[verify-tier1] Overall: PASS (warnings are non-blocking for Phase 1)"
+echo "[verify-tier1] Overall: PASS"
 exit 0

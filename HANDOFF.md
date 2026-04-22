@@ -5,10 +5,49 @@
 
 ---
 
-## v0.2.0 (2026-04-22) — **Phase 1 完全完了** ✅
+## v0.3.0 (2026-04-23) — **Phase 1.5 完了: caffeinate LaunchAgent 自動化** ✅
+
+v0.2.0 デプロイ後、Mac が sleep して iPhone 接続不可になる実問題が発生。Phase 2 予定だった LaunchAgent 自動化を Phase 1.5 として前倒し実装・リリース。手動 `caffeinate -d &` 運用を廃止、LaunchAgent が 24/7 Mac awake を保証。
+
+### Phase 1.5 DoD (追加要件)
+
+- [x] `scripts/setup-caffeinate-launchd.sh` 新規 (dry-run default / `--apply` / `--uninstall` / `--status`, idempotent, macOS 13+ gate, xattr -c 自動, plutil -lint 自動)
+- [x] `templates/com.mobile-dev-bridge.caffeinate.plist.template` 新規 (flags `-i -m -s`, `KeepAlive dict`, Logs to `~/Library/Logs/`)
+- [x] `verify-tier1.sh` 項目6 を WARN→**FAIL** に昇格
+- [x] `doctor.sh` 7-layer 拡張 (L6=caffeinate, L7=Termius)
+- [x] `references/setup-tier1.md` §8 全面書き換え + Apple Silicon 蓋閉じ警告
+- [x] `references/troubleshooting.md` §L6 caffeinate 診断追加
+- [x] `QUICKSTART.md` Step 5.5 追加 (9 step 構成)
+- [x] `SKILL.md` Mode Router に `Install (caffeinate)` 追加 + Phase 1.5 DoD
+- [x] CI `.github/workflows/shellcheck.yml` に plist xmllint 検証追加
+- [ ] **HG-5 実機検証**: iPhone から Mac 再起動後の再接続テスト (次セッションで確認)
+
+### リサーチ履歴 (v0.3.0 策定時)
+
+- `caffeinate` フラグ: `-dimsu` (community 多数派) → `-ims` (headless SSH 最適化) に改善。`-d` (display) は電力浪費、`-u` は daemon 誤用
+- `launchctl load` → `launchctl bootstrap gui/$UID` (macOS 13+ 必須)
+- `KeepAlive: true` → `dict {SuccessfulExit: false}` (restart storm 防止)
+- LaunchAgent (user) vs LaunchDaemon (root): 個人用は Agent が正解
+- Apple Silicon 蓋閉じ: ハードウェア磁気検知で caffeinate 不可 → docs 明示
+
+### v0.2.0 運用で顕在化した問題
+
+**発生日時**: 2026-04-23 (v0.2.0 リリース翌日)
+**症状**: iPhone Termius から Mac に繋がらない
+**HG-3 FACTS 収集**:
+- `doctor.sh` HEALTHY, Tailscale up, 鍵 fingerprint 一致, Mosh 前回成功実績あり
+- `pmset -g log` が 2026-04-22 14:59 の Sleep で途切れていた
+- 昨日の Mac は Maintenance Sleep/DarkWake ループの連続
+- `caffeinate` LaunchAgent 未設置 (Phase 1 設計どおり、WARN のみ)
+**HG-4 HYPOTHESIS**: 前セッション離脱時に手動 caffeinate を打ち忘れ、Mac が deep sleep → iPhone 不達
+**HG-5 即時対応**: `nohup caffeinate -dis &` で復旧後、本 v0.3.0 で恒久対策
+
+---
+
+## v0.2.0 (2026-04-22) — **Phase 1 完全完了** ✅ [superseded by v0.3.0]
 
 全 forge_ace ゲート PASS + gatekeeper HG-5 実機検証 PASS + PQG 残課題 (Termius Free Mosh) 解決。
-Phase 1 MVP は production-ready、次は Phase 2 以降の拡張。
+Phase 1 MVP は production-ready。翌日 Mac sleep 問題で v0.3.0 へ継続。
 
 ### 完了した Phase 1 DoD
 
@@ -29,7 +68,7 @@ Phase 1 MVP は production-ready、次は Phase 2 以降の拡張。
 
 ### 次にやること (Phase 2 以降)
 
-- **Phase 2**: caffeinate LaunchAgent 自動化 + Claude iOS `remote-control` 連携
+- **Phase 2**: ~~caffeinate LaunchAgent 自動化~~ (v0.3.0 で完了) + Claude iOS `remote-control` 連携
 - **Phase 3**: code-server (Tier 2) 対応
 - **Phase 4**: Moshi webhook / Upgrade サイクル確立
 
@@ -111,15 +150,18 @@ Phase 1 で実際に起きた障害の記録 (全て解決済)。
 | verify-tier1.sh L2 mosh-server test flaky | 2026-04-22 Phase 1 HG-5 | stdout(MOSH CONNECT)/stderr(version banner) merge の flush 順依存 | ✅ RESOLVED (commit 6788b87, v0.1.2) |
 | Termius Free tier Mosh 動作未確認 | 2026-04-22 PQG review | termius.com/pricing に明示なし | ✅ RESOLVED (実機で Free tier Mosh 動作確認) |
 | Tailscale brew CLI + GUI daemon 分離 | 2026-04-22 Phase 1 HG-5 | brew formula tailscale は CLI のみ、daemon は別必要 | ⚠️ DOCUMENTED (Phase 1.1 で install-tier1.sh 改善予定) |
+| Mac sleep で iPhone 接続不可 | 2026-04-23 v0.2.0 運用翌日 | Phase 1 は caffeinate が手動運用 (LaunchAgent 未設置)、セッション離脱時に打ち忘れて deep sleep | ✅ RESOLVED (v0.3.0 で LaunchAgent 自動化) |
 
 ---
 
 ## Phase 2 以降の memo (先走り defer)
 
 - Claude iOS app `remote-control` の最新実装確認 (`claude --help` で subcommand 有無を見る)
-- `caffeinate` LaunchAgent の plist 自動生成 (Phase 2 で `scripts/setup-caffeinate-launchd.sh` 追加)
+- ~~`caffeinate` LaunchAgent の plist 自動生成~~ ✅ v0.3.0 で完了
 - Moshi Free tier の動作確認 (Secondary として保持)
 - Tailscale MagicDNS の hostname 固定化手順
 - `ssh-config-snippet.template` の追加 (Phase 2, ユーザーの `~/.ssh/config` に貼る用)
+- `tests/` bats-core スモークテスト導入 (Phase 1.1 polish)
+- Tailscale client/daemon バージョン skew 警告の一元化
 
-これらは **今はやらない**。Phase 1 実機検証が PASS してから手を付ける。
+これらは **今はやらない**。Phase 1.5 実機検証 (iPhone から Mac 再起動後の再接続) が PASS してから手を付ける。

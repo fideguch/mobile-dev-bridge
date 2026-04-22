@@ -1,4 +1,4 @@
-# Troubleshooting — 6-Layer Diagnostic
+# Troubleshooting — 7-Layer Diagnostic
 
 > `./scripts/doctor.sh` の出力とこのファイルを対で読むこと。
 > 2 回同じ仮説で失敗したら捨てること (gatekeeper HG-4)。
@@ -135,7 +135,52 @@ claude auth login
 
 ---
 
-## L6 — Termius config (iOS 側)
+## L6 — caffeinate LaunchAgent (Mac sleep guard, Phase 1.5)
+
+Mac が sleep すると iPhone からの SSH/mosh は全滅する。Phase 1.5 で LaunchAgent 自動化済み。
+
+### 症状: verify-tier1.sh の 6) で FAIL
+
+```bash
+./scripts/setup-caffeinate-launchd.sh --status   # 状態確認
+./scripts/setup-caffeinate-launchd.sh --apply    # 未インストールなら入れる
+pmset -g assertions | grep 'caffeinate.*asserting forever'
+# 3 行出れば OK:
+#   PreventUserIdleSystemSleep / PreventSystemSleep / PreventDiskIdle
+# display 系は含まれない (-d 未使用、ヘッドレス SSH 用途で display 抑制は不要)
+```
+
+### 症状: `launchctl bootstrap` が silent に失敗 (exit 0 だが load されない)
+
+plist に `com.apple.quarantine` xattr が付いている (Sonoma/Sequoia の典型事故)。macOS が外部ダウンロード・tar 展開・AirDrop などで受け取ったファイルに付ける検疫属性で、**`launchctl bootstrap` はこの属性が付いていても明示的エラーを出さず silent fail する**。対処:
+
+```bash
+xattr -c ~/Library/LaunchAgents/com.mobile-dev-bridge.caffeinate.plist
+./scripts/setup-caffeinate-launchd.sh --apply
+```
+
+setup script は `xattr -c` を自動実行するので通常は発生しない。手動で plist をエディタで保存し直したり、リポを zip で受け取った場合のみ再現する。
+
+### 症状: LaunchAgent はロード済だが Mac が寝る
+
+まず Apple Silicon + 蓋閉じでないか確認。蓋閉じはハードウェア磁気検知により caffeinate では防げない。
+`references/setup-tier1.md` §8-3 参照。対策は AC + 蓋オープン、または外部ディスプレイ接続の clamshell モード。
+
+### 症状: ログに restart loop
+
+```bash
+tail -f ~/Library/Logs/com.mobile-dev-bridge.caffeinate.err.log
+```
+
+`caffeinate: unrecognized option` が出ていれば古い macOS。macOS 13+ が必須。
+
+### 症状: バッテリー駆動で sleep する
+
+`caffeinate -s` は Apple 公式仕様で**バッテリー時 silently ignored**。AC 接続を前提に運用するか、`-i -m` だけでも idle sleep は防げる。
+
+---
+
+## L7 — Termius config (iOS 側)
 
 Mac からは直接触れない。iPhone 実機で確認すること。
 
@@ -148,10 +193,6 @@ Mac からは直接触れない。iPhone 実機で確認すること。
 ### 症状: Mosh トグルが出ない
 
 → `references/setup-tier1.md` §4-3 参照。Termius Free tier の仕様変更可能性。
-
-### 症状: Mac 側で caffeinate 切れてスリープ
-
-Phase 1 では手動 `caffeinate -d &`。Phase 2 で LaunchAgent 化予定。
 
 ---
 

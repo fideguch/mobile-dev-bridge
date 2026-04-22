@@ -1,6 +1,6 @@
-# Setup Tier 1 — Tailscale + Termius + mosh + tmux
+# Setup Tier 1 — Tailscale + Termius + mosh + tmux + caffeinate LaunchAgent
 
-> Phase 1 MVP: 自宅 Mac を iPhone / iPad から操作する最小構成。
+> Phase 1.5: 自宅 Mac を iPhone / iPad から操作する最小構成 + 24/7 常時起動。
 > 所要時間: 初回 15-20 分 / 2 回目以降 5 分以内。
 
 このドキュメントは **Mac 側** と **iOS 側** の 2 本立てで進む。Mac 側を終わらせてから iOS 側に移ること。
@@ -164,16 +164,87 @@ fi
 
 ---
 
-## 8. Mac を寝かせない設定 (Phase 1 は手動)
+## 8. Mac を寝かせない設定 (Phase 1.5: LaunchAgent で自動化)
 
-Phase 1 では `caffeinate` を手動で起動:
+**v0.3.0 以降**、手動 `caffeinate -d &` は不要。LaunchAgent が Mac を **24/7 常時起動** に固定する。
+
+### 8-1. インストール
 
 ```bash
-# Mac 側で 1 回実行 (バックグラウンドで走り続ける)
-caffeinate -d &
+# dry-run で内容確認
+./scripts/setup-caffeinate-launchd.sh
+
+# 問題なければ適用 (idempotent、再実行安全)
+./scripts/setup-caffeinate-launchd.sh --apply
 ```
 
-蓋を閉じる前に上記を打つ。Phase 2 で LaunchAgent 化する (`scripts/setup-caffeinate-launchd.sh`)。
+これで以下が完了する:
+
+- `~/Library/LaunchAgents/com.mobile-dev-bridge.caffeinate.plist` 配置
+- `launchctl bootstrap gui/$UID` でロード
+- `/usr/bin/caffeinate -i -m -s` が常駐、Mac のログインと同時に自動起動
+- 死んだら即 restart (`KeepAlive: {SuccessfulExit: false}`)
+
+### 8-2. フラグ選定の根拠
+
+| フラグ | 意味 | 採用 |
+|------|------|------|
+| `-i` | idle system sleep 防止 | ✅ |
+| `-m` | disk idle sleep 防止 | ✅ |
+| `-s` | system sleep 防止 (AC 限定、battery では silently ignored) | ✅ |
+| `-d` | display sleep 防止 | ❌ ヘッドレス SSH 用途で display 不要、電力節約のため除外 |
+| `-u` | user-active 宣言 (5s タイムアウトあり) | ❌ daemon 用途には誤用 |
+
+### 8-3. ⚠️ Apple Silicon + 閉蓋 は防げない (CRITICAL)
+
+Ventura 以降の Apple Silicon Mac は、蓋を閉じると**ハードウェア磁気検知**で強制 sleep に入る。caffeinate でも pmset でもこれは上書きできない ([Macworld 解説](https://www.macworld.com/article/673295/))。
+
+**対策:**
+
+| 運用形態 | 可否 | 備考 |
+|---------|------|------|
+| AC 接続 + **蓋オープン** | ✅ | このスキルが想定する標準構成 (Apple Silicon / Intel どちらも OK) |
+| Clamshell (蓋閉じ + 外部ディスプレイ + 外部キーボード + AC) | ✅ | Apple 公式サポート構成 (Apple Silicon / Intel どちらも OK) |
+| 蓋閉じ + 外部ディスプレイなし | ❌ | Apple Silicon では不可能 (磁気検知で強制 sleep)。Intel は `sudo pmset -a disablesleep 1` で可能だが放熱リスク |
+| **Apple Silicon + 蓋オープン + バッテリー駆動** | ⚠️ | `-i -m` は有効で idle sleep は防げる。ただし `-s` は silently ignored なので、長時間放置するとバッテリー切れ or deep sleep に入る可能性あり |
+| Intel + 蓋オープン + バッテリー駆動 | ⚠️ | 同上 |
+
+### 8-4. 動作確認
+
+```bash
+# LaunchAgent の状態確認
+./scripts/setup-caffeinate-launchd.sh --status
+
+# 生の launchctl で確認
+launchctl print gui/$(id -u)/com.mobile-dev-bridge.caffeinate
+
+# sleep 防止が効いているか (これが本物の証拠)
+pmset -g assertions | grep 'caffeinate.*asserting forever'
+```
+
+`asserting forever` の行が **3 行** 出ていれば LaunchAgent 経由の caffeinate が正しく動いている:
+
+| assertion | 由来フラグ | 意味 |
+|---|---|---|
+| `PreventUserIdleSystemSleep` | `-i` | ユーザー操作無しの idle system sleep 防止 |
+| `PreventSystemSleep` | `-s` | system sleep 防止 (AC 限定、battery では silently ignored) |
+| `PreventDiskIdle` | `-m` | disk idle spindown 防止 |
+
+`PreventUserIdleDisplaySleep` は **出ない** (`-d` を使っていないため — ヘッドレス SSH 用途で display sleep 抑制は不要、電力節約)。
+
+### 8-5. アンインストール
+
+```bash
+./scripts/setup-caffeinate-launchd.sh --uninstall
+# 既存の caffeinate プロセスも止めたい場合:
+pkill -u "$(id -un)" caffeinate
+```
+
+### 8-6. トラブル時
+
+- ログ: `~/Library/Logs/com.mobile-dev-bridge.caffeinate.{out,err}.log`
+- `bootstrap` が silent failure する場合: plist の quarantine xattr が原因。`xattr -c ~/Library/LaunchAgents/com.mobile-dev-bridge.caffeinate.plist` で解決 (setup script は自動実行済)
+- 詳細: `references/troubleshooting.md` §L6
 
 ---
 
