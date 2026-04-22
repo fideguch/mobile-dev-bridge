@@ -21,9 +21,10 @@ Solo developers who use a Mac as their primary workstation and want to continue 
 
 ## Status
 
-- **Version**: v0.1.1
-- **Phase**: Phase 1 MVP (Tier 1 stack setup, verification, diagnostics)
-- **Real-device verification**: pending — see `HANDOFF.md` for the gatekeeper HG-5 checklist
+- **Version**: v0.2.0 — **Phase 1 Complete** 🎉
+- **Phase**: Phase 1 MVP + real-device verified (iPhone 15 + MacBook, 2026-04-22)
+- **Real-device verification**: PASS — all forge_ace gates + gatekeeper HG-5 cleared
+- **Notable finding**: Termius Free tier supports Mosh (confirmed on-device; pricing page does not enumerate it)
 
 ## Quick install
 
