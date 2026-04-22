@@ -1,17 +1,6 @@
 ---
 name: mobile-dev-bridge
-description: |
-  Bridge your iPhone/iPad to a Mac development environment using free tools
-  (Tailscale + SSH + mosh + tmux + Claude Code CLI). Sets up, verifies, and
-  diagnoses the Tier 1 stack so your Claude Code session continues on the Mac
-  while you work from mobile.
-  Use when user says: "スマホから開発", "iPhone で Claude Code",
-  "Mac をスマホから操作", "モバイル開発環境", "Tailscale セットアップ",
-  "mosh 繋がらない", "Termius 設定", "mobile dev setup",
-  "iphone to mac dev", "tailscale ssh mac", "claude code mobile".
-  Do NOT use for: non-mobile Mac setup, unrelated networking questions,
-  or when the user is already in a forge_ace implementation session for
-  another project.
+description: iPhone/iPad から Mac の開発環境 (Tailscale + Termius + mosh + tmux + Claude Code CLI) に SSH 繋ぎ、kireinavi-dev 等のローカル開発を継続するためのセットアップ・検証・診断スキル。継続コスト $0。
 triggers:
   - "スマホから開発"
   - "iPhone で Claude Code"
@@ -52,6 +41,20 @@ triggers:
 4. 実機検証未完了で「セットアップ完了」宣言しない (gatekeeper HG-5)
 5. webhook / push 通知には Claude プロンプト本文を流さない (イベント名のみ)
 6. 有料アプリを勝手に購入ステップに入れない
+
+---
+
+## When to use / Not to use
+
+**Use when** ユーザーが以下を発話:
+- "スマホから開発" / "iPhone で Claude Code" / "Mac をスマホから操作"
+- "モバイル開発環境" / "Tailscale セットアップ" / "mosh 繋がらない" / "Termius 設定"
+- "mobile dev setup" / "iphone to mac dev" / "tailscale ssh mac" / "claude code mobile"
+
+**Do NOT use for**:
+- Mac 自体のセットアップ全般 (このスキルは「モバイル → Mac」の橋渡しに限定)
+- 無関係なネットワーク質問
+- 他プロジェクトの forge_ace 実装セッション中 (切り替えは明示承認必須)
 
 ---
 

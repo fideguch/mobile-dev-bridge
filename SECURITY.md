@@ -91,3 +91,34 @@ tmux -V              # → tmux 3.4 以上
 ## 過去のインシデント
 
 (まだなし。発生したら CHANGELOG.md の `### Security` 節に追記)
+
+---
+
+## Premortem (v2.1 plan §7 excerpt)
+
+Phase 1 着手前に identified した失敗モード上位 12 件。各行: **リスク / 予防策 / 発生時対処**。
+
+| リスク | 予防策 | 発生時対処 |
+|--------|-------|-----------|
+| Moshi (Secondary) がサービス停止 | Primary は Termius、Moshi は optional | `references/setup-tier1.md` §10 の plain SSH フォールバックに切替 |
+| Tailscale の無料枠が改悪 / サービス停止 | VERSIONS を `TAILSCALE_MIN` で固定、月次で Tailscale ブログ巡回 | Headscale (OSS 自前 control plane) への移行手順を Phase 4 で用意 |
+| Mac が勝手にスリープ (caffeinate 切れ) | `verify-tier1.sh` 項目 6 で LaunchAgent 検査、Phase 2 で plist 自動生成 | `caffeinate -d &` を手動再投入、`launchctl load` ログ確認 |
+| SSH 秘密鍵が iPhone 側で漏洩 | Secure Enclave / iOS 生体認証必須、モバイル専用鍵 `id_ed25519_mobile` で分離 | Tailscale Admin Console で端末削除 + `authorized_keys` から該当行削除 |
+| `.env` が commit に紛れる | HARD-GATE #3 (スキルは touch しない)、`.gitignore` で `.env` 系 deny | `git filter-repo` で履歴削除 + Supabase/Stripe キー即ローテーション |
+| webhook payload に Claude プロンプト本文が流出 | HARD-GATE #5 (イベント名のみ)、Phase 2 実装時に contract test | webhook endpoint rotation + 流出範囲確認 |
+| "完了" 誤宣言 (実機未検証なのに Done 扱い) | gatekeeper HG-5 で実機 PASS 必須、HANDOFF.md に Known Issues セクション | HANDOFF §Known Issues に追記 → PR で revert |
+| Termius が Free tier から Mosh サポート削除 | 初回実機検証で確認、HANDOFF.md にログ | Moshi Free へ Primary 切替 or plain SSH + tmux で継続 |
+| キャリア / カフェ Wi-Fi が UDP ブロック | `references/setup-tier1.md` §10 plain SSH フォールバック手順を事前用意 | Termius `Use Mosh` OFF + tmux attach snippet 切替 |
+| Tailscale 無料枠上限 (3 user / 100 devices) 超過 | 個人運用で想定外だが月次確認 | Personal Pro ($6/mo) への upgrade 検討 |
+| macOS アップグレードで sshd / caffeinate 挙動変化 | 年 1 回 `scripts/doctor.sh` を全層再検証、CHANGELOG に追記 | 再検証 → troubleshooting.md 更新 |
+| Termius アカウントロック (free tier の MFA 失敗等) | MFA バックアップコード保管、 Moshi Free を Secondary に保持 | Secondary クライアントで暫定運用、Termius に復旧連絡 |
+
+---
+
+## SLO
+
+| 指標 | 目標 | 測定方法 |
+|------|-----|--------|
+| `verify-tier1.sh` 実行時間 | ≤ 60 秒 (Phase 1 ベースライン) | `time ./scripts/verify-tier1.sh` |
+| `doctor.sh` 偽陽性率 | ≤ 10% (Phase 1 テスト fleet n=2 以上の Mac で、HG-5 検証後に測定) | HANDOFF.md の Known Issues と実測 pass 率 |
+| QUICKSTART セットアップ所要時間 | 初見で ≤ 15 分 (DoD #1) | 実機検証時にストップウォッチ |

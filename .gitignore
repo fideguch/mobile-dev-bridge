@@ -19,7 +19,8 @@ npm-debug.log*
 # forge_ace / gatekeeper session state (ephemeral)
 .forge-ace-session.json
 .gatekeeper/
-/tmp/
+# tmp/  — ignore per-repo tmp directory (NOT system /tmp)
+tmp/
 
 # Shell script backups created by install-tier1.sh
 *.backup
