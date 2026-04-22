@@ -1,9 +1,9 @@
-# QUICKSTART — 5 分で Phase 1 を試す
+# QUICKSTART — 5 分で Phase 1.5 を試す
 
 > 詳しい解説・毎日の使用フロー・モード一覧は [`README.md`](./README.md) を参照。
 > このファイルは「迷わず動かす」ための最短経路。
 
-> この 8 ステップで 4 層 (🔐トンネル → 🗝️鍵付きドア → 🎣ケーブル → 📦ボックス) を順に組みます。
+> この 9 ステップで 5 層 (🔐トンネル → 🗝️鍵付きドア → 🎣ケーブル → 📦ボックス → 💤 sleep guard) を順に組みます。
 
 ## 前提条件
 
@@ -83,6 +83,31 @@ tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); p
 # → macbook-pro.tail-xxxxx.ts.net.  ← これを iPhone 側に入れる
 ```
 
+## Step 5.5. Mac を 24/7 常時起動に固定 (Phase 1.5)
+
+```bash
+# dry-run
+./scripts/setup-caffeinate-launchd.sh
+
+# 適用 (idempotent、再実行安全)
+./scripts/setup-caffeinate-launchd.sh --apply
+```
+
+これで LaunchAgent が `/usr/bin/caffeinate -i -m -s` を常駐させ、Mac がログインの度に自動起動する。手動で `caffeinate -d &` を毎回打つ必要はなくなる。
+
+⚠️ **Apple Silicon Mac を蓋閉じで運用する場合は外部ディスプレイ + キーボードが必要** (ハードウェア磁気検知で強制 sleep、caffeinate では防げない)。詳細は `references/setup-tier1.md` §8-3。
+
+動作確認:
+
+```bash
+pmset -g assertions | grep 'caffeinate.*asserting forever'
+# 3 行出れば OK:
+#   PreventUserIdleSystemSleep (-i: idle system sleep 防止)
+#   PreventSystemSleep         (-s: system sleep 防止、AC 限定)
+#   PreventDiskIdle            (-m: disk idle sleep 防止)
+# display assertion は出ない (-d 未使用、電力節約のため)
+```
+
 ## Step 6. iPhone 側 Termius で Host を追加 (アプリ自体はインストール済み前提)
 
 詳細手順は [`references/setup-tier1.md`](./references/setup-tier1.md) の Section 3-5 を参照。ざっくり:
@@ -101,7 +126,7 @@ tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); p
 ./scripts/verify-tier1.sh
 ```
 
-全項目 PASS なら Phase 1 セットアップ完了。FAIL があれば次へ。
+全項目 PASS なら Phase 1.5 セットアップ完了。FAIL があれば次へ。
 
 ## Step 8. トラブル時
 
@@ -109,7 +134,7 @@ tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); p
 ./scripts/doctor.sh
 ```
 
-6 層 (Tailscale / SSH / mosh / tmux / Claude CLI / Termius config) の診断と修復提案が出る。
+7 層 (Tailscale / SSH / mosh / tmux / Claude CLI / caffeinate / Termius config) の診断と修復提案が出る。
 それでも解決しない場合は [`references/troubleshooting.md`](./references/troubleshooting.md) を参照。
 
 ---
@@ -122,7 +147,7 @@ tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); p
 | `brew install tailscale` が失敗 | `brew update` 実行後にリトライ |
 | Tailscale ログインでブラウザが開かない | `sudo tailscale up --login-server=https://controlplane.tailscale.com` |
 | Termius で Mosh が選択肢に出ない | Termius Free tier で Mosh サポートが外れた可能性。`references/setup-tier1.md` の「Termius Free + Mosh 検証」節を確認 |
-| Mac がスリープで繋がらない | `./scripts/install-tier1.sh --apply` が caffeinate LaunchAgent を入れる (Phase 2 の拡張予定、Phase 1 は手動 `caffeinate -d &` で代替) |
+| Mac がスリープで繋がらない | `./scripts/setup-caffeinate-launchd.sh --apply` で LaunchAgent を入れる (Phase 1.5)。Apple Silicon + 蓋閉じは `references/setup-tier1.md` §8-3 参照 |
 
 完了すれば、外出先から iPhone で保存済ホストをタップ一発で Mac の tmux に繋がる。
 (Termius 経由で接続時、バックグラウンドで `mosh user@macbook.tail-xxxxx.ts.net` 相当のコマンドが走る。)

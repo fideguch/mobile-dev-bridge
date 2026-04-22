@@ -2,11 +2,12 @@
 
 > スマホ (iPhone / iPad) から Mac の開発環境をシームレスに操作するための Claude Code スキル。
 > Tailscale + SSH + mosh + tmux + Claude Code CLI を無料で組み合わせ、自宅の MacBook をそのままモバイルから叩く。
+> **Phase 1.5 で 24/7 常時起動 LaunchAgent 搭載** — 手動で `caffeinate` を打つ必要なし。
 
 - **継続コスト**: $0 / 月 (iOS アプリ無料 + Tailscale 無料 + mosh OSS + tmux OSS)
 - **対象ユーザー**: Mac 主機で開発する個人エンジニア (初期は本人、将来チーム展開)
-- **Phase 1 MVP**: Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) のセットアップ支援・検証・診断
-- **品質ゲート**: forge_ace Full (Writer / Guardian / Overseer / PM-Admin / Designer PASS) + gatekeeper (HG-5 実機検証は次工程)
+- **Phase 1.5**: Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) + **caffeinate LaunchAgent 自動化** のセットアップ支援・検証・診断
+- **品質ゲート**: forge_ace Full (Writer / Guardian / Overseer / PM-Admin / Designer PASS) + gatekeeper HG-5 (v0.2.0 実機検証 PASS、v0.3.0 の LaunchAgent 実機検証は次セッション)
 
 詳細な計画書: `~/.claude/bochi-data/memos/2026-04-22-mobile-dev-bridge-skill-plan.md` (v2.1)
 
@@ -34,7 +35,7 @@
 🔐 Tailscale MagicDNS (macbook.tail-xxxxx.ts.net)
    │  SSH ED25519 鍵認証
    ▼
-🖥️ MacBook (蓋閉じ・AC 接続・caffeinate で起きたまま)
+🖥️ MacBook (AC 接続・蓋オープン・LaunchAgent の caffeinate で 24/7 awake)
    └─ 🎣 mosh-server (UDP で状態保持)
        └─ 📦 tmux session "main"
            ├─ w0: 🤖 Claude Code CLI
@@ -42,14 +43,15 @@
            └─ w2: supabase start
 ```
 
-**ポイント**: iPhone は「窓」、実体は MacBook 側で動き続ける。蓋を閉じても `caffeinate` で寝ない。tmux が画面を保持するので、iPhone を閉じても Claude Code は止まらない。
+**ポイント**: iPhone は「窓」、実体は MacBook 側で動き続ける。LaunchAgent 化された `caffeinate` が Mac を 24/7 awake 固定。tmux が画面を保持するので、iPhone を閉じても Claude Code は止まらない。
+⚠️ Apple Silicon + 蓋閉じはハードウェア磁気検知で強制 sleep になるため、AC + 蓋オープン運用、または clamshell mode (外部ディスプレイ + キーボード) が前提。
 
 ---
 
-## 1. QUICKSTART (5 分で Phase 1 を試す)
+## 1. QUICKSTART (5 分で Phase 1.5 を試す)
 
 **前提**:
-- Mac (macOS Sonoma 以降) に Homebrew が入っている
+- Mac (macOS Ventura / 13+) に Homebrew が入っている
 - Tailscale アカウントを持っている (無料)
 - iPhone / iPad に Termius がインストール済み (無料)
 - SSH 鍵ペア `~/.ssh/id_ed25519` (または `id_ed25519_mobile`) があれば流用可。未作成なら Step 5 で生成手順あり
@@ -67,10 +69,14 @@ cd ~/mobile-dev-bridge
 # 出力を読んで問題なければ:
 ./scripts/install-tier1.sh --apply
 
-# 4. 疎通テスト (6 項目チェック)
+# 4. caffeinate LaunchAgent で Mac を 24/7 常時起動 (Phase 1.5)
+./scripts/setup-caffeinate-launchd.sh                    # dry-run
+./scripts/setup-caffeinate-launchd.sh --apply            # install
+
+# 5. 疎通テスト (6 項目チェック、caffeinate LaunchAgent 含む)
 ./scripts/verify-tier1.sh
 
-# 5. Termius iOS での設定手順はこちらを読む
+# 6. Termius iOS での設定手順はこちらを読む
 cat references/setup-tier1.md
 ```
 
@@ -78,23 +84,23 @@ cat references/setup-tier1.md
 
 ---
 
-## 2. ファイル構成 (Phase 1 DoD と突き合わせ)
+## 2. ファイル構成 (Phase 1.5 DoD と突き合わせ)
 
-Phase 1 MVP の Definition of Done を満たす最小構成。ファイル点数を明示して、計画書と差分が出ないことを保証する。
+Phase 1.5 の Definition of Done を満たす構成。
 
 | 種別 | 個数 | ファイル | DoD 対応 |
 |------|-----|---------|---------|
 | ルート文書 | 9 | `README.md` / `README.en.md` / `CHANGELOG.md` / `CONTRIBUTING.md` / `SECURITY.md` / `QUICKSTART.md` / `HANDOFF.md` / `LICENSE` / `SKILL.md` | QUICKSTART が読める (DoD #3) |
 | インストーラー | 2 | `install.sh` / `uninstall.sh` | シンボリックリンク作成 (DoD #1) |
-| Scripts | 3 | `scripts/install-tier1.sh` / `scripts/verify-tier1.sh` / `scripts/doctor.sh` | 疎通 6 項目 + 診断 6 層 (DoD #1, #2) |
+| Scripts | 4 | `scripts/install-tier1.sh` / `scripts/verify-tier1.sh` / `scripts/doctor.sh` / `scripts/setup-caffeinate-launchd.sh` | 疎通 6 項目 + 診断 7 層 + 24/7 awake (DoD #1, #2, #4) |
 | References | 3 | `references/setup-tier1.md` / `references/security.md` / `references/troubleshooting.md` | iOS/Mac 両側手順 (DoD #3) |
-| Templates | 1 | `templates/tmux.conf.template` | tmux 設定 (DoD #1) |
-| CI | 1 | `.github/workflows/shellcheck.yml` | shellcheck で即 fail (P8) |
-| Tests placeholder | 1 | `tests/.gitkeep` | Phase 2 以降 |
+| Templates | 2 | `templates/tmux.conf.template` / `templates/com.mobile-dev-bridge.caffeinate.plist.template` | tmux 設定 + LaunchAgent (DoD #1) |
+| CI | 1 | `.github/workflows/shellcheck.yml` | shellcheck + plist xmllint で即 fail (P8) |
+| Tests placeholder | 1 | `tests/.gitkeep` | Phase 1.1 polish で bats-core 導入 |
 
-**合計**: scripts=3, references=3, templates=1, root docs=9 — 計画書 §2-1 の Phase 1 スコープと一致。
+**合計**: scripts=4, references=3, templates=2, root docs=9。v0.2.0 からの diff: +1 script, +1 template。
 
-### Phase 1 で扱わないもの (明示的 defer)
+### Phase 1.5 で扱わないもの (明示的 defer)
 
 - Claude iOS app `remote-control` 統合 → Phase 2
 - code-server (Tier 2) → Phase 3
@@ -126,9 +132,10 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 |----------------|--------|------|
 | 「スマホから開発したい」「iPhone で Claude Code」 | **Assess** | 現環境ヒアリング → Tier 提案 |
 | 「Tailscale セットアップして」 | **Install (Mac)** | `install-tier1.sh` を dry-run 提示 → 承認後実行 |
+| 「Mac を 24/7 起きたまま」「caffeinate」 | **Install (caffeinate)** | `setup-caffeinate-launchd.sh` を dry-run 提示 → 承認後実行 |
 | 「Termius の設定教えて」 | **Install (iOS guide)** | `references/setup-tier1.md` の iOS 手順を提示 |
 | 「スマホから繋がるか確認して」 | **Verify** | `verify-tier1.sh` 実行 → 6 項目チェック |
-| 「mosh が切れる」「繋がらない」 | **Troubleshoot** | `doctor.sh` 実行 → 6 層診断 |
+| 「mosh が切れる」「繋がらない」「Mac が寝る」 | **Troubleshoot** | `doctor.sh` 実行 → 7 層診断 |
 | 「新しい手法出てる？」 | **Upgrade** | 最新動向評価 (Phase 4 で実装) |
 
 ---
@@ -148,8 +155,8 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 
 ## 6. 開発ステータス
 
-- **現在**: v0.2.0 — **Phase 1 Complete** 🎉 Tier 1 スタック (Tailscale + Termius Free + mosh + tmux + Claude Code) が実機 (iPhone 15 + MacBook, 2026-04-22) で end-to-end 動作確認済。**Termius Free tier で Mosh が使える事実も実機で確定**。
-- **次 (Phase 1.1 polish)**: install-tier1.sh に brew-cask 案内追加、QUICKSTART に「Tailscale ≠ Termius」「http:// 不要」警告
+- **現在**: v0.3.0 — **Phase 1.5: caffeinate LaunchAgent automation** 🎉 Mac を 24/7 awake にする LaunchAgent を追加。手動 `caffeinate -d &` 運用廃止。v0.2.0 で PASS 済の iPhone 実機検証は継続、LaunchAgent 特化の再起動後永続性検証は次セッション。
+- **次 (Phase 1.1 polish)**: install-tier1.sh に brew-cask 案内追加、QUICKSTART に「Tailscale ≠ Termius」「http:// 不要」警告、`tests/` bats-core 導入
 - **将来 Phase**: Claude iOS 連携 (Phase 2) → code-server (Phase 3) → Upgrade サイクル (Phase 4)
 
 引き継ぎ・検証ログ: [`HANDOFF.md`](./HANDOFF.md)

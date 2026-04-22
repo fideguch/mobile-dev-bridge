@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  mobile-dev-bridge caffeinate LaunchAgent (Phase 1.5).
+
+  Placeholders substituted at install time by scripts/setup-caffeinate-launchd.sh:
+    __HOME__ -> the installing user's $HOME (plist requires absolute paths;
+                launchd does NOT expand $HOME or ~).
+
+  Flags rationale (see references/setup-tier1.md §8):
+    -i  block idle system sleep
+    -m  block disk idle sleep
+    -s  block system sleep (AC only; silently ignored on battery per Apple)
+
+  Intentionally NO -d: headless SSH use case, lit display wastes power.
+  Intentionally NO -u: -u is a display-wake trigger with a default timeout,
+                       wrong semantics for a persistent daemon.
+
+  KeepAlive is a dict (SuccessfulExit=false) rather than bare <true/>: restart
+  only on abnormal exit, avoiding respawn storms on clean exits. Reference:
+  tjluoma/launchd-keepalive.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mobile-dev-bridge.caffeinate</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
+        <string>-m</string>
+        <string>-s</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/com.mobile-dev-bridge.caffeinate.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/com.mobile-dev-bridge.caffeinate.err.log</string>
+</dict>
+</plist>
