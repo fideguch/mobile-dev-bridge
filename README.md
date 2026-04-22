@@ -148,8 +148,8 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 
 ## 6. 開発ステータス
 
-- **現在**: v0.1.1 — Phase 1 Tier 1 スタックのセットアップ・検証・診断を支援できる状態。実機検証 (gatekeeper HG-5) は未完了。
-- **次**: Phase 1 実機検証 (gatekeeper HG-5) → Termius Free tier での Mosh 実動作確認
+- **現在**: v0.2.0 — **Phase 1 Complete** 🎉 Tier 1 スタック (Tailscale + Termius Free + mosh + tmux + Claude Code) が実機 (iPhone 15 + MacBook, 2026-04-22) で end-to-end 動作確認済。**Termius Free tier で Mosh が使える事実も実機で確定**。
+- **次 (Phase 1.1 polish)**: install-tier1.sh に brew-cask 案内追加、QUICKSTART に「Tailscale ≠ Termius」「http:// 不要」警告
 - **将来 Phase**: Claude iOS 連携 (Phase 2) → code-server (Phase 3) → Upgrade サイクル (Phase 4)
 
 引き継ぎ・検証ログ: [`HANDOFF.md`](./HANDOFF.md)

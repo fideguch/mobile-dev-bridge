@@ -6,11 +6,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned (Phase 1.1 polish)
+- `install-tier1.sh`: detect brew formula (CLI-only) vs cask/App Store (daemon included) and guide accordingly
+- QUICKSTART.md: explicit "Tailscale ≠ Termius" distinction + icon hints
+- QUICKSTART.md: explicit "no http:// prefix, no trailing dot in Address" warning
+- setup-tier1.md: lead with System Settings GUI path for Remote Login on macOS 13+
+
 ### Planned (Phase 2+)
 - Claude iOS `remote-control` integration
 - code-server (Tier 2) setup references
 - Moshi webhook / push notification bridge (event names only)
 - Upgrade review protocol (annual)
+- `caffeinate` LaunchAgent automation (Phase 2)
+
+## [0.2.0] — 2026-04-22 — **Phase 1 Complete** 🎉
+
+Phase 1 MVP fully validated on real hardware. All forge_ace gates PASS + gatekeeper HG-5 real-device verification PASS + PQG condition #1 (Termius Free Mosh) resolved.
+
+### Verified (on iPhone 15 / iOS + macOS Mac)
+
+- **Tier 1 stack end-to-end**: `iPhone (Termius Free)` → `Tailscale P2P` → `SSH + Mosh` → `MacBook` → `tmux main auto-attach` → `Claude Code CLI v2.1.117 interactive`
+- **Termius Free tier supports Mosh** (as of 2026-04-22). PQG condition #1 resolved: official pricing page does not enumerate Mosh, but real-device test confirms Mosh connection picker appears in Free tier and commands execute over Mosh without issue. See HANDOFF.md §Termius Free + Mosh verification log for details.
+- `verify-tier1.sh`: 5 PASS / 0 FAIL / 1 WARN (caffeinate — Phase 2 scope)
+- tmux `main` auto-attach via `~/.zshrc` SSH-connection hook: verified
+- Claude Code CLI starts and responds to prompts inside tmux over Mosh: verified
+
+### Added
+
+- HANDOFF.md §Observations / Friction Log filled with 7 real-world friction points discovered during HG-5
+- HANDOFF.md §Known Issues / Postmortem Candidates filled with 3 resolved/documented issues
+
+### Status
+
+v0.2.0 is the first release where Phase 1 Tier 1 is **production-ready for the author's personal use** (not just "on paper"). Phase 1.1 polish items are queued for the next session; Phase 2+ defers remain as planned.
 
 ## [0.1.2] — 2026-04-22
 
