@@ -36,14 +36,17 @@ fi
 # ──────────────────────────────────────────────────────────────────────────
 echo "2) mosh-server loopback"
 if command -v mosh-server >/dev/null 2>&1; then
-  # mosh-server prints connection info to stdout and exits after handshake.
-  # We just verify it launches without error in "new" mode (non-interactive smoke).
-  if mosh-server new -v 2>&1 | head -1 | grep -q 'MOSH CONNECT'; then
+  # mosh-server prints "MOSH CONNECT <port> <key>" on stdout and version banner
+  # on stderr. With 2>&1 merge, line ordering is flush-timing dependent, so
+  # reading only the first line (head -1) is flaky. Read up to 8 lines within
+  # a bounded window, kill the server, then scan for the MOSH CONNECT token.
+  MOSH_OUT=$(mosh-server new -v 2>&1 | head -8 || true)
+  pkill -u "$(id -un)" -f 'mosh-server new' 2>/dev/null || true
+  if printf '%s\n' "$MOSH_OUT" | grep -q 'MOSH CONNECT'; then
     pass "mosh-server launches and prints MOSH CONNECT handshake"
-    # kill any lingering mosh-server from this smoke test
-    pkill -u "$(id -un)" -f 'mosh-server new' 2>/dev/null || true
   else
-    fail "mosh-server did not produce expected MOSH CONNECT output"
+    FIRST_LINE=$(printf '%s\n' "$MOSH_OUT" | head -1)
+    fail "mosh-server did not produce expected MOSH CONNECT output (first line was: '${FIRST_LINE}')"
   fi
 else
   fail "mosh-server not found. Run: ./scripts/install-tier1.sh --apply"
