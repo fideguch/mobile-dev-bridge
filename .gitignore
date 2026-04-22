@@ -1,0 +1,29 @@
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node / runtime artifacts
+node_modules/
+*.log
+npm-debug.log*
+
+# Secrets — HARD-GATE: never commit
+.env
+.env.*
+!.env.example
+
+# forge_ace / gatekeeper session state (ephemeral)
+.forge-ace-session.json
+.gatekeeper/
+/tmp/
+
+# Shell script backups created by install-tier1.sh
+*.backup
+*.bak
+
+# Local user-specific overrides
+local/

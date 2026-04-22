@@ -1,0 +1,39 @@
+# tmux.conf — mobile-dev-bridge Phase 1 template
+# Placed at ~/.tmux.conf by scripts/install-tier1.sh. Existing file is backed up
+# with a timestamped suffix before this template is written.
+
+# ── Terminal + colors ─────────────────────────────────────────────────────
+set -g default-terminal "tmux-256color"
+set -as terminal-overrides ",xterm-256color:RGB"
+
+# ── Mouse + history ───────────────────────────────────────────────────────
+set -g mouse on
+set -g history-limit 50000
+
+# ── Sane defaults ─────────────────────────────────────────────────────────
+set -g base-index 1
+setw -g pane-base-index 1
+set -g renumber-windows on
+set -s escape-time 5
+
+# ── Status bar ────────────────────────────────────────────────────────────
+set -g status-interval 5
+set -g status-style "bg=black,fg=white"
+set -g status-left "[#S] "
+set -g status-right "%Y-%m-%d %H:%M "
+set -g status-right-length 40
+
+# ── Key bindings (minimal additions, keep default prefix C-b) ─────────────
+bind r source-file ~/.tmux.conf \; display-message "tmux.conf reloaded"
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+
+# ── Auto-attach snippet for ~/.zshrc (paste manually, NOT sourced here) ───
+# Add these lines to ~/.zshrc so SSH/mosh logins auto-attach to session "main":
+#
+#   if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ] && [ -n "$SSH_CONNECTION" ]; then
+#     tmux attach -t main 2>/dev/null || tmux new -s main
+#   fi
+#
+# This keeps Claude Code / next dev / supabase start running inside tmux across
+# iPhone disconnect + reconnect cycles.
