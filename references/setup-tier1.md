@@ -17,9 +17,9 @@ ls ~/.ssh/id_ed25519*        # 既存の ED25519 鍵確認 (なくても下で�
 claude --version             # Claude Code CLI 動作確認
 ```
 
-iOS 側 (実機操作):
+iOS 側 (実機操作、**Termius アプリは既にインストール済み前提**):
 - iPhone / iPad に Tailscale アプリをインストール (App Store 無料)
-- iPhone / iPad に Termius アプリをインストール (App Store 無料)
+- iPhone / iPad の Termius アプリは既に入っている前提。まだなら App Store → 「Termius」で入れる (30 秒)
 
 ---
 
@@ -43,6 +43,7 @@ cd ~/mobile-dev-bridge
 
 ```bash
 sudo tailscale up
+# sudo 必要: Tailscale の VPN インターフェース (utun) 作成にカーネル権限が要る
 ```
 
 ブラウザが開くので Tailscale アカウントでログイン。戻ってきたら:
@@ -66,9 +67,9 @@ MagicDNS ホスト名 (`macbook.tail-xxxxx.ts.net` 相当) は後で iPhone 側�
 3. Tailscale アプリ内で「Connect」トグルを ON
 4. Mac の MagicDNS ホスト名が一覧に出れば成功
 
-### 4-2. Termius iOS (Primary クライアント)
+### 4-2. Termius iOS (Primary クライアント、アプリは既にインストール済み前提)
 
-1. Termius アプリを開く → 新規アカウント作成 or ログイン (無料で OK)
+1. Termius アプリを開く (未ログインなら無料でアカウント作成 or ログイン)
 2. `Hosts` タブ → `+` → `New Host`
 3. 入力内容:
    - **Label**: `MacBook (client)` など
@@ -184,7 +185,41 @@ caffeinate -d &
 
 ---
 
-## 10. 参考ソース
+## 10. plain SSH フォールバック (UDP ブロック環境用)
+
+キャリア / カフェ Wi-Fi / 社内ネットワークで UDP port 60000-61000 がブロックされている場合、mosh は繋がらない (`references/troubleshooting.md` §L1 参照)。その時は mosh を諦めて plain SSH + tmux attach で代用する。
+
+### Termius 側設定
+
+1. Termius で保存済みの Host を編集 → `Use Mosh` OFF
+2. 下部の "Startup Snippet" に以下を貼る:
+
+```bash
+tmux attach -t main 2>/dev/null || tmux new -s main
+```
+
+3. 保存 → 接続
+
+### 期待される動作
+
+- SSH 接続後すぐ tmux "main" に attach される (無ければ新規作成)
+- mosh と違い、電波切れると接続は切れるが、tmux session は Mac 側に残り続ける
+- 再接続すれば同じ session に戻れる (tmux が画面保持しているため)
+
+### トレードオフ
+
+| 項目 | mosh | plain SSH + tmux |
+|------|------|------------------|
+| UDP 必要 | Yes | No |
+| 電波切れで切断 | 耐える | 切れる (session は残る) |
+| ロール変換遅延 | 低 | 低 |
+| タイピング遅延 | 極低 | 低〜中 |
+
+UDP が通る環境に戻ったら `Use Mosh` を ON に戻して良い。
+
+---
+
+## 11. 参考ソース
 
 - Tailscale iOS docs: https://tailscale.com/kb/1020/install-ios/
 - Termius iOS docs: https://support.termius.com/

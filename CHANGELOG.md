@@ -12,9 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moshi webhook / push notification bridge (event names only)
 - Upgrade review protocol (annual)
 
+## [0.1.1] — 2026-04-22
+
+Polish round addressing findings from the 4-agent forge_ace review (Guardian / Overseer / PM-Admin / Designer).
+
+### Changed
+- **SKILL.md**: compressed `description` frontmatter (~200 chars) per Guardian M-1; moved overflow guidance into body "When to use / Not to use" section
+- **README.md**: corrected gate-status claim and updated Status line to reflect real-device verification still pending; softened SSH key prereq per Designer UX #3
+- **README.en.md**: added Target User / Non-Goals / Status sections per PM-Admin M-4
+- **QUICKSTART.md**: softened Termius + SSH key prereqs, added `tailscale status` expected-output example with JSON MagicDNS extraction tip, added 4-layer metaphor header, clarified `mosh` command context per Designer UX #1/#2
+- **references/setup-tier1.md**: added §10 plain SSH fallback section (UDP-block remediation), added `sudo tailscale up` kernel-permission note, reflected Termius-installed user state
+- **references/troubleshooting.md**: §10 cross-ref now resolves (setup-tier1 §10 created)
+- **SECURITY.md**: added §Premortem (12-row risk table, v2.1 plan §7 excerpt) per PM-Admin H-1 and §SLO per PM-Admin M-2
+- **HANDOFF.md**: added §Observations / Friction Log and §Known Issues / Postmortem Candidates templates per PM-Admin M-1/M-3
+- **CONTRIBUTING.md**: replaced `HG-GATE` with `HARD-GATE` (4 sites) per Guardian L-3, added Pre-release checklist with `gh repo view --json` emptiness check
+- **.gitignore**: renamed `/tmp/` to `tmp/` with clarifying comment per Guardian M-2
+- **scripts/verify-tier1.sh**: documented `set -e` intentional omission per Guardian L-1
+- **scripts/doctor.sh**: noted grep-pattern brittleness for future regression test, extended metaphor to L1–L6 remediation headers per Designer LOW-enhancement
+- Normalized Japanese "繋ぐ" usage across docs per Designer consistency finding
+
+### Notes
+- No code functionality changes. Documentation and comment fixes only.
+- HG-5 real-device verification still pending (see HANDOFF.md §Next session starter).
+
 ## [0.1.0] — 2026-04-22
 
-Initial Phase 1 MVP scaffold. forge_ace Full + gatekeeper (HG-1 through HG-5) applied.
+v0.1.0 — enables a user to go from a clean Mac to a verified Tier 1 setup in ≤ 15 minutes on paper; real-device verification pending (see HANDOFF.md §Known Issues).
 
 ### Added
 - `SKILL.md` with YAML frontmatter (name, description, JP + EN triggers) and mode router
@@ -33,5 +56,5 @@ Initial Phase 1 MVP scaffold. forge_ace Full + gatekeeper (HG-1 through HG-5) ap
 - `LICENSE` — MIT
 
 ### Notes
-- Termius Free tier Mosh support: as of 2026-04-22, not explicitly listed on termius.com/pricing. To be confirmed during first Phase 1 device verification. See `HANDOFF.md`.
+- Termius Free tier Mosh support: see HANDOFF.md §Termius Free + Mosh verification log for the 2026-04-22 WebFetch result (termius.com/pricing shows no explicit Mosh listing on Free tier).
 - Phase 1 intentionally excludes: Claude iOS integration, code-server, Moshi, Pro-tier features.

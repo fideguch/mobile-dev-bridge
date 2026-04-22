@@ -68,6 +68,26 @@ gh repo view fideguch/mobile-dev-bridge     # GitHub 側の状態
 
 ---
 
+## Observations / Friction Log
+
+Phase 1 実機検証中に気づいた摩擦をここに記録 (最初は空、気づいたら追加)。
+
+| 日付 | 場面 | 摩擦 | 提案 |
+|------|------|------|------|
+| — | — | — | — |
+
+---
+
+## Known Issues / Postmortem Candidates
+
+実機で再現する障害をここに記録。失敗が起きたら行を追加。
+
+| issue | first seen | root cause hypothesis | status |
+|-------|-----------|----------------------|--------|
+| — | — | — | — |
+
+---
+
 ## Phase 2 以降の memo (先走り defer)
 
 - Claude iOS app `remote-control` の最新実装確認 (`claude --help` で subcommand 有無を見る)

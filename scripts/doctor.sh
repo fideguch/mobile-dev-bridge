@@ -27,14 +27,19 @@ set -e
 
 echo
 echo "══════════════════════════════════════════════════════════════════════"
-echo " Remediation hints (6 layers)"
+echo " Remediation hints (6 layers — README §0 metaphor)"
 echo "══════════════════════════════════════════════════════════════════════"
 
-# L1: Tailscale
+# NOTE: the grep patterns below rely on verify-tier1.sh output ordering
+# ("1) Tailscale", "2) mosh-server" etc.). If that script's section
+# headers change, update the patterns here in lock-step. A tests/
+# regression guard is planned for Phase 2.
+
+# L1: Tailscale 🔐 トンネル
 if grep -q '1) Tailscale' "${TMP_OUT}" && grep -A1 '1) Tailscale' "${TMP_OUT}" | grep -q FAIL; then
   cat <<'HINT_L1'
 
-L1 Tailscale FAIL:
+L1 🔐 トンネル — Tailscale FAIL:
   - Reinstall:        brew reinstall tailscale
   - Auth daemon:      sudo tailscale up
   - Manual browser:   open https://login.tailscale.com/admin/machines
@@ -43,11 +48,11 @@ L1 Tailscale FAIL:
 HINT_L1
 fi
 
-# L2: SSH (key absence is covered by L5 in verify-tier1, but SSH agent/config is separate)
+# L2: SSH 🗝️ 鍵付きドア (key absence is covered by L5 in verify-tier1, but SSH agent/config is separate)
 if grep -q '5) SSH key' "${TMP_OUT}" && grep -A1 '5) SSH key' "${TMP_OUT}" | grep -q FAIL; then
   cat <<'HINT_L2'
 
-L2 SSH FAIL (no key):
+L2 🗝️ 鍵付きドア — SSH FAIL (no key):
   - Generate:         ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_mobile -C "iphone-$(date +%Y%m%d)"
   - Authorize:        cat ~/.ssh/id_ed25519_mobile.pub >> ~/.ssh/authorized_keys
   - Perms:            chmod 600 ~/.ssh/authorized_keys; chmod 700 ~/.ssh
@@ -55,11 +60,11 @@ L2 SSH FAIL (no key):
 HINT_L2
 fi
 
-# L3: mosh
+# L3: mosh 🎣 ケーブル
 if grep -q '2) mosh-server' "${TMP_OUT}" && grep -A1 '2) mosh-server' "${TMP_OUT}" | grep -q FAIL; then
   cat <<'HINT_L3'
 
-L3 mosh FAIL:
+L3 🎣 ケーブル — mosh FAIL:
   - Reinstall:        brew reinstall mosh
   - UDP port check:   sudo lsof -i UDP | grep mosh
   - Locale (common):  export LC_ALL=en_US.UTF-8 (add to ~/.zshrc)
@@ -68,11 +73,11 @@ L3 mosh FAIL:
 HINT_L3
 fi
 
-# L4: tmux
+# L4: tmux 📦 ボックス
 if grep -q '3) tmux' "${TMP_OUT}" && grep -A1 '3) tmux' "${TMP_OUT}" | grep -q FAIL; then
   cat <<'HINT_L4'
 
-L4 tmux FAIL:
+L4 📦 ボックス — tmux FAIL:
   - Reinstall:        brew reinstall tmux
   - Kill stale:       tmux kill-server
   - Config check:     tmux -f ~/.tmux.conf new -d -s test && tmux kill-session -t test
@@ -80,11 +85,11 @@ L4 tmux FAIL:
 HINT_L4
 fi
 
-# L5: Claude CLI
+# L5: Claude CLI 🤖 AI
 if grep -q '4) Claude Code CLI' "${TMP_OUT}" && grep -A1 '4) Claude Code CLI' "${TMP_OUT}" | grep -q FAIL; then
   cat <<'HINT_L5'
 
-L5 Claude Code CLI FAIL:
+L5 🤖 AI — Claude Code CLI FAIL:
   - Install:          See https://docs.anthropic.com/en/docs/claude-code
   - PATH:             which claude || echo "not in PATH"
   - Reload shell:     exec $SHELL -l
@@ -92,10 +97,10 @@ L5 Claude Code CLI FAIL:
 HINT_L5
 fi
 
-# L6: Termius (iOS-side, can only give advice here)
+# L6: Termius 📱 窓 (iOS-side, can only give advice here)
 cat <<'HINT_L6'
 
-L6 Termius (iOS-side):
+L6 📱 窓 — Termius (iOS-side):
   - Termius cannot be inspected from the Mac. If Mosh is not an option in
     the Termius Host edit screen, your Free-tier may no longer include Mosh.
   - Fallback: use plain SSH + tmux attach. Add 'ssh user@host -t "tmux attach"' as a Termius snippet.

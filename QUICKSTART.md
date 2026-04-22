@@ -3,12 +3,14 @@
 > 詳しい解説・毎日の使用フロー・モード一覧は [`README.md`](./README.md) を参照。
 > このファイルは「迷わず動かす」ための最短経路。
 
+> この 8 ステップで 4 層 (🔐トンネル → 🗝️鍵付きドア → 🎣ケーブル → 📦ボックス) を順に組みます。
+
 ## 前提条件
 
 - macOS Sonoma 以降 / Homebrew インストール済み
 - Tailscale アカウント (無料) 作成済み
-- iPhone / iPad に Termius (無料) インストール済み
-- Mac に SSH 鍵 (`~/.ssh/id_ed25519` または `~/.ssh/id_ed25519_mobile`) 既にある
+- iPhone / iPad の Termius (無料) はインストール済み前提。まだなら App Store → 「Termius」で入れる (30 秒)。既にインストール済みなら Step 6 は Host 追加から。
+- Mac に SSH 鍵 (`~/.ssh/id_ed25519` または `~/.ssh/id_ed25519_mobile`) があれば流用可。未作成なら Step 5 で生成手順あり
 - Claude Code CLI (`claude`) インストール済み
 
 ## Step 1. リポジトリ取得
@@ -67,7 +69,21 @@ tailscale ip -4          # → 自分の Tailscale IP を確認
 tailscale status         # → 他デバイスとの接続状態確認
 ```
 
-## Step 6. iPhone 側 Termius 設定
+**期待される出力例** (`tailscale status | head -1`):
+
+```
+100.64.12.34    macbook-pro          fumito@     macOS   -
+```
+
+1 行目に自分の Mac が `<TSIP>   <hostname>   <user>  macOS  -` の形で出れば OK。
+MagicDNS 名を確実に拾いたい時は:
+
+```bash
+tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["Self"]["DNSName"])'
+# → macbook-pro.tail-xxxxx.ts.net.  ← これを iPhone 側に入れる
+```
+
+## Step 6. iPhone 側 Termius で Host を追加 (アプリ自体はインストール済み前提)
 
 詳細手順は [`references/setup-tier1.md`](./references/setup-tier1.md) の Section 3-5 を参照。ざっくり:
 
@@ -108,4 +124,5 @@ tailscale status         # → 他デバイスとの接続状態確認
 | Termius で Mosh が選択肢に出ない | Termius Free tier で Mosh サポートが外れた可能性。`references/setup-tier1.md` の「Termius Free + Mosh 検証」節を確認 |
 | Mac がスリープで繋がらない | `./scripts/install-tier1.sh --apply` が caffeinate LaunchAgent を入れる (Phase 2 の拡張予定、Phase 1 は手動 `caffeinate -d &` で代替) |
 
-完了すれば、外出先から iPhone で `mosh user@macbook.tail-xxxxx.ts.net` 一発で Mac の tmux に繋がる。
+完了すれば、外出先から iPhone で保存済ホストをタップ一発で Mac の tmux に繋がる。
+(Termius 経由で接続時、バックグラウンドで `mosh user@macbook.tail-xxxxx.ts.net` 相当のコマンドが走る。)

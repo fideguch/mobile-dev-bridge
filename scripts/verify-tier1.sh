@@ -2,6 +2,9 @@
 # verify-tier1.sh — 6-item smoke test for Tier 1 stack.
 # Returns 0 if all pass, non-zero if any fail. Safe to re-run.
 set -uo pipefail
+# -e intentionally omitted: we collect failures across multiple layers and
+# print a summary at the end. Using -e would short-circuit on the first FAIL
+# and hide the rest of the diagnostic output.
 
 PASS_COUNT=0
 FAIL_COUNT=0

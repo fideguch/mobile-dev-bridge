@@ -6,7 +6,7 @@
 - **継続コスト**: $0 / 月 (iOS アプリ無料 + Tailscale 無料 + mosh OSS + tmux OSS)
 - **対象ユーザー**: Mac 主機で開発する個人エンジニア (初期は本人、将来チーム展開)
 - **Phase 1 MVP**: Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) のセットアップ支援・検証・診断
-- **品質ゲート**: forge_ace Full + gatekeeper (HG-1 〜 HG-5) でレビュー済
+- **品質ゲート**: forge_ace Full (Writer / Guardian / Overseer / PM-Admin / Designer PASS) + gatekeeper (HG-5 実機検証は次工程)
 
 詳細な計画書: `~/.claude/bochi-data/memos/2026-04-22-mobile-dev-bridge-skill-plan.md` (v2.1)
 
@@ -18,7 +18,7 @@
 
 | 部品 | 例え | 実際の役割 |
 |------|------|-----------|
-| 🔐 **Tailscale** | 「自宅とスマホを結ぶ**秘密の地下トンネル**」 | インターネットを経由せず、MacBook と iPhone を **直接 P2P で結ぶ VPN**。公開 IP 不要、ルーターのポート開放不要、他人は絶対入れない |
+| 🔐 **Tailscale** | 「自宅とスマホを繋ぐ**秘密の地下トンネル**」 | インターネットを経由せず、MacBook と iPhone を **直接 P2P で繋ぐ VPN**。公開 IP 不要、ルーターのポート開放不要、他人は絶対入れない |
 | 🗝️ **SSH + ED25519 鍵** | 「トンネルの先にある**鍵付きドア**」 | トンネルを抜けた先で Mac に入るための電子キー。鍵ファイルは iPhone の Secure Enclave に保存 |
 | 🎣 **mosh** | 「切れない**魔法のケーブル**」 | 普通の SSH は電波切れた瞬間死ぬ。mosh は **UDP で状態をサーバに持たせる** → 電車のトンネル・Wi-Fi 切替・スリープでも切れない |
 | 📦 **tmux** | 「Mac の中にある**画面保存ボックス**」 | 「スマホから見てる画面」と「Mac 本体の画面」を**切り離す**装置。iPhone を閉じても Claude Code は tmux の中で動き続ける |
@@ -52,7 +52,7 @@
 - Mac (macOS Sonoma 以降) に Homebrew が入っている
 - Tailscale アカウントを持っている (無料)
 - iPhone / iPad に Termius がインストール済み (無料)
-- SSH 鍵ペア `~/.ssh/id_ed25519` (または `id_ed25519_mobile`) が既にある
+- SSH 鍵ペア `~/.ssh/id_ed25519` (または `id_ed25519_mobile`) があれば流用可。未作成なら Step 5 で生成手順あり
 
 ```bash
 # 1. このリポジトリをクローン
@@ -148,7 +148,7 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 
 ## 6. 開発ステータス
 
-- **現在**: Phase 1 MVP scaffold 完了 (v0.1.0)
+- **現在**: v0.1.1 — Phase 1 Tier 1 スタックのセットアップ・検証・診断を支援できる状態。実機検証 (gatekeeper HG-5) は未完了。
 - **次**: Phase 1 実機検証 (gatekeeper HG-5) → Termius Free tier での Mosh 実動作確認
 - **将来 Phase**: Claude iOS 連携 (Phase 2) → code-server (Phase 3) → Upgrade サイクル (Phase 4)
 
