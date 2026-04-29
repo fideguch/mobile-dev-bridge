@@ -4,7 +4,7 @@
 
 - **Ongoing cost**: $0 / month (all free-tier)
 - **Target user**: Individual engineers whose primary machine is a Mac
-- **Phase 1.5**: Tier 1 stack (Termius Free + Tailscale + mosh + tmux) + **caffeinate LaunchAgent automation (24/7 awake)**
+- **Phase 1.6**: Tier 1 stack (Termius Free + Tailscale + mosh + tmux) + caffeinate LaunchAgent (24/7 awake) + **production blind-spot patches (Block A: Remote Login + Block D: mosh PATH via `~/.zshenv`)**
 
 For full documentation (including metaphor diagram, daily-use flow, and mode reference), see the **Japanese [README.md](./README.md)**. This English version is intentionally abbreviated for GitHub discovery.
 
@@ -21,8 +21,8 @@ Solo developers who use a Mac as their primary workstation and want to continue 
 
 ## Status
 
-- **Version**: v0.3.0 — **Phase 1.5: caffeinate LaunchAgent automation** 🎉
-- **Phase**: Phase 1.5 adds a user-level LaunchAgent that keeps the Mac awake 24/7 via `/usr/bin/caffeinate -i -m -s`, removing the manual `caffeinate -d &` step from Phase 1
+- **Version**: v0.4.0 — **Phase 1.6: production blind-spot patches** 🎉
+- **Phase**: Phase 1.6 closes two blind spots that survived Phase 1.5: (Block A) `verify-tier1.sh 6/6 PASS` could not detect Remote Login being OFF — every iPhone connection silently failed; (Block D) Apple Silicon `mosh-server` is at `/opt/homebrew/bin`, but SSH command-exec PATH excludes it, causing mosh clients to silently fall back to plain SSH. The fixes: 3 new verify items (sshd reachable / Tailscale path / mosh-server SSH-discoverable), Step 0 GUI advisory in install-tier1, and `templates/zshenv.template` (NOT `.zprofile`)
 - **Flag rationale**: `-i -m -s` instead of the community's `-dimsu` — no `-d` (wastes display power on a headless SSH target), no `-u` (5-second display-wake trigger, wrong semantics for a daemon)
 - **Known limit**: Apple Silicon MacBooks enforce hardware lid-close sleep regardless of caffeinate. Use AC + lid open, or clamshell mode with an external display.
 - **Real-device verification**: v0.2.0 cleared all forge_ace gates + gatekeeper HG-5 (iPhone 15 + MacBook, 2026-04-22). v0.3.0 LaunchAgent reboot-persistence verification is queued for the next session.
@@ -38,7 +38,7 @@ cd ~/mobile-dev-bridge
 ./scripts/install-tier1.sh --apply               # actually install tailscale + mosh + tmux
 ./scripts/setup-caffeinate-launchd.sh            # dry-run the LaunchAgent installer (Phase 1.5)
 ./scripts/setup-caffeinate-launchd.sh --apply    # actually install the LaunchAgent
-./scripts/verify-tier1.sh                        # 6-item smoke test
+./scripts/verify-tier1.sh                        # 9-item smoke test
 ```
 
 ## HARD-GATE rules

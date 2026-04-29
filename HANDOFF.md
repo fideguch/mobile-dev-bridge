@@ -5,11 +5,66 @@
 
 ---
 
+## v0.4.0 (2026-04-30) — **Phase 1.6: 本番盲点 2 件 (Block A/D) close** ✅
+
+v0.3.0 (Phase 1.5) リリース後、`verify-tier1.sh 6/6 PASS` 状態で iPhone から繋がらない・mosh の利点が効かない 2 件の本番盲点が顕在化。Phase 1.6 はこれを verify/doctor/install/docs 全層で close した。
+
+### Phase 1.6 DoD
+
+- [x] `scripts/verify-tier1.sh` に項目 7 (Remote Login TCP/22 reachable on loopback)、項目 8 (Tailscale-IP TCP/22 reachable)、項目 9 (mosh-server discoverable via SSH command-exec) を追加し 9/9 PASS
+- [x] `scripts/doctor.sh` に L7 (sshd FAIL hint)、L8 (Tailscale-path FAIL hint)、L9 (mosh-server discoverability FAIL hint) の grep-conditional 修復ヒントを追加。Termius advisory ブロックを ordinal 外して常時表示の助言として降格
+- [x] `references/troubleshooting.md` §L2 に「verify-tier1.sh 7) FAIL — Remote Login OFF」セクション + macOS launchd on-demand-spawn の罠を追記
+- [x] `references/troubleshooting.md` §L3 に「Termius が Mosh ラベルでも mosh-server プロセスが起動しない (silent SSH fallback)」サブセクションを新設
+- [x] `scripts/install-tier1.sh` preflight 冒頭に Step 0 advisory (System Settings → 一般 → 共有 → リモートログイン = ON) を追加。NEXT heredoc に Step 8 (zshenv テンプレート copy) を追加
+- [x] `templates/zshenv.template` 新規作成 (`~/.zprofile` ではなく `~/.zshenv` に置く理由を冒頭コメントで詳述)
+- [x] `CHANGELOG.md` に [0.4.0] エントリ追加 (Added/Changed/Research/Root-cause/Migration/Known limitations 6 セクション)
+- [x] `HANDOFF.md` に本セクション追加
+- [x] `SKILL.md` Phase 1.5 → Phase 1.6 へ昇格、DoD 4 → 6 項目に拡張、Mode Router の Verify/Troubleshoot を 9 項目/9 層へ更新
+- [ ] **HG-5 実機検証 (次セッション)**: iPhone Termius 再接続 → 接続中の Mac で `pgrep mosh-server` が PID を返す + `lsof -iUDP:60000-61000` が `mosh-server` を返す + `nc -z <TS_IP> 22` 即時成功
+
+### HG-3 facts collection log (本リリースを引き起こした 2026-04-30 不具合報告)
+
+**修正前**:
+- `verify-tier1.sh` → `5 pass / 0 fail / 1 warn` → Overall: PASS (false green)
+- `lsof -iTCP:22 -sTCP:LISTEN` → 空 (Block A: Remote Login OFF)
+- `ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'which mosh-server'` → 空文字 (Block D: SSH PATH に Homebrew 不在)
+- iPhone Termius の Mosh タグ表示はあるが、Mac 側で `pgrep mosh-server` 空 → silent SSH fallback
+
+**修正後**:
+- `verify-tier1.sh` → 9/9 PASS
+- `pgrep mosh-server` → `mosh-server new -s -c 256 -l LANG=en_US.UTF-8` PID あり
+- `lsof -iUDP:60000-61000` → `mosh-server ... UDP 100.95.25.43:60001`
+- `nc -z 100.95.25.43 22` → 即時成功
+
+### 2 件の root cause (named diagnoses)
+
+1. **Block A: macOS Remote Login Hidden Off** — `verify-tier1.sh` 6/6 PASS でも Remote Login が OFF だと iPhone 接続は全 silent fail。`pgrep sshd` も `lsof` も idle 中は空なので「sshd は動いてない」と勘違いしやすい (実際は launchd on-demand spawn)。GUI の System Settings → 一般 → 共有 → リモートログイン を ON にする以外に確実な方法はない
+2. **Block D: SSH command-exec PATH Homebrew Blindness** — Homebrew インストーラーが `~/.zprofile` に `eval $(brew shellenv)` を書くため login shell では PATH が通る。しかし SSH command-exec (mosh の起動経路) は non-interactive non-login shell で `~/.zprofile` を読まない → `mosh-server` が見つからない → mosh client が silent fallback して plain SSH 化。`~/.zshenv` に brew shellenv を置くことで全 invocation 種別をカバー
+
+### HG-5 verify steps for next session
+
+```bash
+# 1. verify-tier1.sh が 9/9 PASS を維持しているか
+./scripts/verify-tier1.sh
+# 期待: [verify-tier1] Summary: 9 pass / 0 fail / 0 warn
+
+# 2. iPhone Termius から MagicDNS 経由で mosh 接続
+# 接続中の Mac で:
+pgrep mosh-server   # PID が出れば mosh が真に起動している
+lsof -iUDP:60000-61000 | grep mosh-server   # UDP リスナーが Tailscale IP に bind しているか
+
+# 3. Block D の独立検証
+ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
+# 期待: /opt/homebrew/bin/mosh-server
+```
+
+---
+
 ## v0.3.0 (2026-04-23) — **Phase 1.5 完了: caffeinate LaunchAgent 自動化** ✅
 
 v0.2.0 デプロイ後、Mac が sleep して iPhone 接続不可になる実問題が発生。Phase 2 予定だった LaunchAgent 自動化を Phase 1.5 として前倒し実装・リリース。手動 `caffeinate -d &` 運用を廃止、LaunchAgent が 24/7 Mac awake を保証。
 
-### Phase 1.5 DoD (追加要件)
+### Phase 1.5 base DoD
 
 - [x] `scripts/setup-caffeinate-launchd.sh` 新規 (dry-run default / `--apply` / `--uninstall` / `--status`, idempotent, macOS 13+ gate, xattr -c 自動, plutil -lint 自動)
 - [x] `templates/com.mobile-dev-bridge.caffeinate.plist.template` 新規 (flags `-i -m -s`, `KeepAlive dict`, Logs to `~/Library/Logs/`)

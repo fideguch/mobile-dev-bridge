@@ -56,6 +56,24 @@ run_or_print() {
 # ──────────────────────────────────────────────────────────────────────────
 # 1. Preflight
 # ──────────────────────────────────────────────────────────────────────────
+cat <<'PRELIM'
+
+[install-tier1] Step 0 (manual GUI, please verify BEFORE this script):
+
+  System Settings → General → Sharing → Remote Login = ON
+
+  Without Remote Login enabled, every iPhone connection attempt silently
+  fails — verify-tier1.sh items 1–6 can all PASS while the Mac is
+  fundamentally unreachable. This is the #1 production blind spot.
+
+  You may also try the CLI:
+      sudo systemsetup -setremotelogin on
+
+  …but on macOS 13+ the CLI version requires Terminal to have Full Disk
+  Access, and silently fails without it. The GUI path is more reliable.
+
+PRELIM
+
 if ! command -v brew >/dev/null 2>&1; then
   echo "[install-tier1][ERROR] Homebrew not found. Install from https://brew.sh first." >&2
   exit 1
@@ -148,4 +166,14 @@ cat <<'NEXT'
   5. Add the public key to ~/.ssh/authorized_keys on this Mac.
   6. In Termius: Hosts -> Add Host with your Tailscale MagicDNS hostname.
   7. Run ./scripts/verify-tier1.sh after completing the above.
+  8. Add Homebrew shellenv to ~/.zshenv (NOT ~/.zprofile) so SSH command-exec
+     (used by Termius mosh) can find mosh-server. Without this, mosh silently
+     falls back to plain SSH on Apple Silicon. Quickest path:
+       cp templates/zshenv.template ~/.zshenv
+     If ~/.zshenv already exists, merge the brew-shellenv block instead:
+       if [[ -x /opt/homebrew/bin/brew ]]; then
+         eval "$(/opt/homebrew/bin/brew shellenv)"
+       elif [[ -x /usr/local/bin/brew ]]; then
+         eval "$(/usr/local/bin/brew shellenv)"
+       fi
 NEXT

@@ -12,7 +12,7 @@ if [ ! -x "${VERIFY_SCRIPT}" ]; then
 fi
 
 echo "══════════════════════════════════════════════════════════════════════"
-echo " mobile-dev-bridge doctor — 7-layer diagnostic"
+echo " mobile-dev-bridge doctor — 9-layer diagnostic"
 echo "══════════════════════════════════════════════════════════════════════"
 echo
 
@@ -27,7 +27,7 @@ set -e
 
 echo
 echo "══════════════════════════════════════════════════════════════════════"
-echo " Remediation hints (7 layers — README §0 metaphor)"
+echo " Remediation hints (per verify-tier1.sh item)"
 echo "══════════════════════════════════════════════════════════════════════"
 
 # NOTE: the grep patterns below rely on verify-tier1.sh output ordering
@@ -114,16 +114,74 @@ L6 💤 Sleep guard — caffeinate LaunchAgent FAIL:
 HINT_CAFFEINATE
 fi
 
-# L7: Termius 📱 窓 (iOS-side, can only give advice here)
-cat <<'HINT_L7'
+# L7: Remote Login (sshd) — verify-tier1 item 7
+if grep -q '7) Remote Login' "${TMP_OUT}" && grep -A1 '7) Remote Login' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<'HINT_L7_SSHD'
 
-L7 📱 窓 — Termius (iOS-side):
+L7 — Remote Login (sshd TCP/22) FAIL:
+  - GUI fix:          System Settings → General → Sharing → Remote Login = ON
+  - CLI fix:          sudo systemsetup -setremotelogin on
+                      (macOS 13+ may need Terminal-with-FDA; GUI is more reliable)
+  - macOS 13+ note:   sshd is launchd-managed (on-demand). 'pgrep sshd' may show
+                      nothing while idle; the port only opens at connection time.
+                      A TCP probe (nc -z 127.0.0.1 22) is the reliable check.
+  See references/troubleshooting.md §L2.
+HINT_L7_SSHD
+fi
+
+# L8: Tailscale ↔ sshd path — verify-tier1 item 8
+if grep -q '8) Tailscale-IP' "${TMP_OUT}" && grep -A1 '8) Tailscale-IP' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<'HINT_L8'
+
+L8 — Tailscale-IP TCP/22 path FAIL:
+  - First:            re-check L7. If item 7 FAILs, item 8 cannot pass.
+  - macOS Firewall:   /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+                      If 'enabled', allow sshd or set 'Block all incoming' = OFF.
+  - Tailscale ACL:    https://login.tailscale.com/admin/acls — verify the device
+                      tag/user is permitted to reach this Mac on TCP/22.
+  - Diagnose path:    tailscale ip -4         # confirm IP we are testing
+                      tailscale ping <peer>   # verify P2P path is up
+  See references/troubleshooting.md §L1, §L2.
+HINT_L8
+fi
+
+# L9: mosh-server discoverable via SSH command-exec — verify-tier1 item 9
+if grep -q '9) mosh-server discoverable' "${TMP_OUT}" && grep -A1 '9) mosh-server discoverable' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<'HINT_L9'
+
+L9 — mosh-server SSH-discoverable FAIL (silent-fallback to plain SSH):
+  Symptom: Termius shows "mosh, user@host" tag, but Mac has no mosh-server
+  process during the session. Connection works but mosh benefits (roaming,
+  sleep resilience) are absent — the client silently fell back to SSH.
+
+  Root cause: SSH command-exec PATH on macOS is /usr/bin:/bin:/usr/sbin:/sbin
+  only. Apple Silicon Brew installs mosh-server at /opt/homebrew/bin, which
+  is not on that PATH. ~/.zprofile is NOT enough — it loads only for login
+  shells; SSH command-exec uses non-interactive non-login shells which read
+  ~/.zshenv instead.
+
+  Fix:
+    cp templates/zshenv.template ~/.zshenv
+    # If ~/.zshenv already exists, merge the brew-shellenv block manually.
+
+  Verify:
+    ssh -i ~/.ssh/id_ed25519_mobile <user>@127.0.0.1 'command -v mosh-server'
+    # → /opt/homebrew/bin/mosh-server  (was empty before fix)
+
+  See references/troubleshooting.md §L3.
+HINT_L9
+fi
+
+# Termius 📱 窓 (iOS-side advisory — always shown)
+cat <<'HINT_TERMIUS'
+
+📱 Termius (iOS-side advisory — always shown):
   - Termius cannot be inspected from the Mac. If Mosh is not an option in
     the Termius Host edit screen, your Free-tier may no longer include Mosh.
   - Fallback: use plain SSH + tmux attach. Add 'ssh user@host -t "tmux attach"' as a Termius snippet.
   - Alternative client: install Moshi (Free) on iOS as Secondary.
   See references/troubleshooting.md §L7 and references/setup-tier1.md §4.
-HINT_L7
+HINT_TERMIUS
 
 echo
 echo "══════════════════════════════════════════════════════════════════════"
