@@ -1,0 +1,25 @@
+# ~/.zshenv — sourced by zsh on every invocation (login, non-login,
+# interactive, non-interactive). Use this (NOT ~/.zprofile) so SSH
+# command-exec contexts inherit Homebrew PATH for mosh-server discovery.
+#
+# Why ~/.zshenv (not ~/.zprofile):
+#   ~/.zprofile is loaded for LOGIN shells only.
+#   `ssh user@host -- command` uses NON-INTERACTIVE NON-LOGIN shells.
+#   These shells skip ~/.zprofile but read ~/.zshenv.
+#
+# Effect: when Termius/Moshi mosh runs `ssh user@host -- mosh-server new -s ...`
+# the user's login shell (zsh) executes it via `zsh -c "..."` and reads
+# this file first, putting /opt/homebrew/bin on PATH. Without this,
+# sshd hands the command a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin)
+# and Homebrew binaries are invisible — mosh silently falls back to plain SSH.
+#
+# Sources:
+#   - https://github.com/mobile-shell/mosh/issues/237
+#   - https://github.com/orgs/Homebrew/discussions/1307
+#   - https://getmoshi.app/articles/fix-mosh-fallback-ssh-macos
+
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi

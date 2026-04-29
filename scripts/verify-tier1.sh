@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-tier1.sh — 6-item smoke test for Tier 1 stack.
+# verify-tier1.sh — 9-item smoke test for Tier 1 stack.
 # Returns 0 if all pass, non-zero if any fail. Safe to re-run.
 set -uo pipefail
 # -e intentionally omitted: we collect failures across multiple layers and
@@ -17,7 +17,7 @@ fail() { printf '  [FAIL] %s\n' "$*"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 # warn() as needed for future non-blocking checks. WARN_COUNT is retained in
 # the summary output for backward compatibility with consumers that parsed it.
 
-echo "[verify-tier1] 6-item smoke test"
+echo "[verify-tier1] 9-item smoke test"
 echo
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -112,6 +112,77 @@ elif command -v caffeinate >/dev/null 2>&1; then
   fail "caffeinate LaunchAgent not installed. Run: ./scripts/setup-caffeinate-launchd.sh --apply"
 else
   fail "caffeinate binary missing. Reinstall Xcode Command Line Tools."
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. Remote Login (sshd) listening on TCP/22
+# ──────────────────────────────────────────────────────────────────────────
+# Without this, every connection attempt from iPhone silently fails — and
+# items 1-6 can all PASS while the Mac is fundamentally unreachable. This is
+# the #1 blind spot reported during v0.3.x real-world iPhone reconnects.
+# Detection: nc -z probes the port without sending data. macOS sshd is
+# launchd-managed (on-demand), so `lsof -iTCP:22 -sTCP:LISTEN` is unreliable
+# without sudo; a TCP probe is the user-mode-friendly equivalent.
+echo "7) Remote Login (sshd TCP/22 reachable on loopback)"
+if command -v nc >/dev/null 2>&1; then
+  if nc -z -G 3 127.0.0.1 22 >/dev/null 2>&1; then
+    pass "TCP/22 reachable on 127.0.0.1 (Remote Login is ON)"
+  else
+    fail "TCP/22 not reachable. System Settings → General → Sharing → Remote Login = ON"
+  fi
+else
+  fail "nc (netcat) not found. Cannot probe TCP/22. Install: brew install netcat"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 8. Tailscale ↔ sshd path (TCP/22 reachable via Tailscale IP)
+# ──────────────────────────────────────────────────────────────────────────
+# Even if Remote Login is ON, Tailscale interface routing or local firewall
+# could block the path. Probe the actual interface iPhone will use.
+echo "8) Tailscale-IP TCP/22 reachable (real iPhone path)"
+if command -v tailscale >/dev/null 2>&1 && command -v nc >/dev/null 2>&1; then
+  TS_IP="$(tailscale ip -4 2>/dev/null | head -1)"
+  if [ -n "${TS_IP}" ]; then
+    if nc -z -G 3 "${TS_IP}" 22 >/dev/null 2>&1; then
+      pass "TCP/22 reachable on Tailscale IP ${TS_IP}"
+    else
+      fail "TCP/22 unreachable on Tailscale IP ${TS_IP}. Firewall? Tailscale ACL? Re-check item 7 first."
+    fi
+  else
+    fail "Could not resolve Tailscale IPv4. Run: sudo tailscale up"
+  fi
+else
+  fail "tailscale or nc missing — skipped reachability probe"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 9. mosh-server SSH-discoverable (prevent silent fallback to plain SSH)
+# ──────────────────────────────────────────────────────────────────────────
+# When SSH command-exec PATH lacks /opt/homebrew/bin (Apple Silicon Brew),
+# mosh clients silently fall back to plain SSH — every previous verify step
+# can PASS while mobile users get no real mosh benefits (no roaming, no
+# session resumption). The canonical fix is ~/.zshenv with `brew shellenv`.
+# Sources: github.com/mobile-shell/mosh#237, getmoshi.app/articles/fix-mosh-fallback-ssh-macos
+echo "9) mosh-server discoverable via SSH command-exec (mosh fallback guard)"
+SSH_KEY=""
+for k in "${HOME}/.ssh/id_ed25519_mobile" "${HOME}/.ssh/id_ed25519"; do
+  [ -f "${k}" ] && { SSH_KEY="${k}"; break; }
+done
+if [ -z "${SSH_KEY}" ]; then
+  fail "No SSH private key found — cannot probe SSH command-exec PATH (re-run after item 5)"
+elif ! grep -q 'ssh-' "${HOME}/.ssh/authorized_keys" 2>/dev/null; then
+  fail "authorized_keys empty/missing — cannot self-probe (see item 5 hints)"
+else
+  TMP_KH="$(mktemp -t mdb-verify-kh.XXXXXX)"
+  PROBE_OUT="$(ssh -i "${SSH_KEY}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="${TMP_KH}" -o ConnectTimeout=5 \
+    "$(id -un)@127.0.0.1" 'command -v mosh-server' 2>/dev/null)"
+  rm -f "${TMP_KH}"
+  if [ -n "${PROBE_OUT}" ] && [ -x "${PROBE_OUT}" ]; then
+    pass "SSH command-exec resolves mosh-server at ${PROBE_OUT}"
+  else
+    fail "SSH command-exec cannot find mosh-server. Add to ~/.zshenv: eval \"\$(/opt/homebrew/bin/brew shellenv)\""
+  fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────────

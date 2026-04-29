@@ -1,4 +1,4 @@
-# Troubleshooting — 7-Layer Diagnostic
+# Troubleshooting — 9-Layer Diagnostic
 
 > `./scripts/doctor.sh` の出力とこのファイルを対で読むこと。
 > 2 回同じ仮説で失敗したら捨てること (gatekeeper HG-4)。
@@ -58,6 +58,25 @@ sudo systemsetup -getremotelogin
 sudo systemsetup -setremotelogin on
 ```
 
+### 症状: verify-tier1.sh 7) FAIL — Remote Login OFF
+
+`verify-tier1.sh` 項目 7 (`TCP/22 reachable on 127.0.0.1`) が FAIL した場合、Mac の Remote Login が OFF になっている。**iPhone からの接続試行は全部 silent fail する** (Tailscale も鍵も問題なくても、入口が閉まっている状態)。
+
+GUI で確実に直す:
+
+```
+System Settings → 一般 → 共有 → リモートログイン = ON
+```
+
+CLI でも可能だが macOS 13+ では Terminal に Full Disk Access 権限がないと `sudo systemsetup -setremotelogin on` が無言で失敗するため、GUI を推奨:
+
+```bash
+sudo systemsetup -getremotelogin       # On / Off の確認
+sudo systemsetup -setremotelogin on    # FDA 必要、失敗時は GUI へ
+```
+
+**macOS の launchd 仕様の罠**: macOS の sshd は launchd が on-demand で spawn するため、アイドル状態では `pgrep sshd` に出てこない。port 22 は実際に接続が来た時だけ開く。「sshd プロセスが見えない=落ちている」と早合点しないこと。判定は `nc -z 127.0.0.1 22` の方が正確。
+
 ---
 
 ## L3 — mosh
@@ -84,6 +103,43 @@ which mosh-server
 ### 症状: iPhone で mosh が選べない (Termius 側)
 
 → `references/setup-tier1.md` §4-3 の 3 パターン判定。`HANDOFF.md` に結果追記。
+
+### 症状: Termius が Mosh ラベルでも mosh-server プロセスが起動しない (silent SSH fallback)
+
+**症状**: Termius の Host 詳細画面に「mosh, user@host, osx」のタグが出ている。接続は成功し、コマンドも実行できる。**しかし接続中の Mac で `pgrep mosh-server` を打っても何も出ない**。`lsof -iUDP:60000-61000` も空。SSH に silent fall back している状態で、mosh の本来の利点 (ネットワーク切替時の roaming, スリープ復帰の resilience) が効いていない。
+
+**根本原因**: SSH の command-exec モード (`ssh user@host -- some-command`) で macOS が用意する PATH は `/usr/bin:/bin:/usr/sbin:/sbin` のみ。Apple Silicon の Homebrew は `mosh-server` を `/opt/homebrew/bin/mosh-server` に置くため、SSH 越しの mosh client が `mosh-server` を探しに来た時に見つからず、自動的に plain SSH にフォールバックする。
+
+**`~/.zshenv` vs `~/.zprofile` の罠**:
+- Homebrew のインストーラーは `eval "$(brew shellenv)"` を `~/.zprofile` にデフォルトで書く
+- `~/.zprofile` は **login shell 専用** のロードファイル
+- SSH command-exec は **non-interactive non-login** shell を使うため `~/.zprofile` を読まない
+- non-interactive non-login shell が読むのは `~/.zshenv` のみ
+- → `~/.zprofile` だけでは PATH が継承されず、mosh-server が見つからない
+
+**修正手順**:
+
+```bash
+# テンプレートをコピー (新規作成)
+cp ~/mobile-dev-bridge/templates/zshenv.template ~/.zshenv
+
+# 既に ~/.zshenv が存在する場合は中身をマージ:
+cat ~/mobile-dev-bridge/templates/zshenv.template >> ~/.zshenv
+```
+
+**検証**:
+
+```bash
+# 自分の Mac に SSH して mosh-server の解決を確認
+ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
+# 修正前: (空文字)
+# 修正後: /opt/homebrew/bin/mosh-server
+```
+
+**参考**:
+- [Mosh issue #237 — fall-back-to-ssh](https://github.com/mobile-shell/mosh/issues/237)
+- [Homebrew Discussion #1307 — shellenv loading](https://github.com/orgs/Homebrew/discussions/1307)
+- [Moshi docs — fix-mosh-fallback-ssh-macos](https://getmoshi.app/articles/fix-mosh-fallback-ssh-macos)
 
 ---
 

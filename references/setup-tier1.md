@@ -1,6 +1,6 @@
 # Setup Tier 1 — Tailscale + Termius + mosh + tmux + caffeinate LaunchAgent
 
-> Phase 1.5: 自宅 Mac を iPhone / iPad から操作する最小構成 + 24/7 常時起動。
+> Phase 1.6: 自宅 Mac を iPhone / iPad から操作する最小構成 + 24/7 常時起動。
 > 所要時間: 初回 15-20 分 / 2 回目以降 5 分以内。
 
 このドキュメントは **Mac 側** と **iOS 側** の 2 本立てで進む。Mac 側を終わらせてから iOS 側に移ること。
@@ -132,13 +132,13 @@ Termius で生成した公開鍵を Mac の `authorized_keys` に貼るだけで
 
 ## 6. 疎通テスト
 
-### 6-1. Mac 側 (自動 6 項目チェック)
+### 6-1. Mac 側 (自動 9 項目チェック)
 
 ```bash
 ./scripts/verify-tier1.sh
 ```
 
-6 項目すべて PASS が期待値。
+9 項目すべて PASS が期待値。
 
 ### 6-2. iPhone 側 (実機)
 
