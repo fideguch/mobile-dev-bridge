@@ -127,6 +127,21 @@ Phase 1.7 の Definition of Done を満たす構成。
                     └─ 翌朝 Termius 再起動 → 瞬時に元の状態に戻る
 ```
 
+### watchdog 運用メモ (Phase 1.7)
+
+Mac 側の Tailscale がどんな理由で切れても watchdog が **2 分以内に自動復旧**する。日常で意識するのは 2 つだけ:
+
+```bash
+# 意図的に Tailscale を切りたい時 (他 VPN を使う等) — 先に pause する
+./scripts/setup-tailscale-watchdog.sh --pause 2    # 2 時間 (期限付き・自動復帰)
+./scripts/setup-tailscale-watchdog.sh --resume     # 早めに戻す
+
+# 調子が悪い時の状態確認
+./scripts/setup-tailscale-watchdog.sh --status     # LaunchAgent / pause / BackendState / log
+tail ~/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.log
+# → [NEEDS-HUMAN] が出ていたら Tailscale の再認証が必要 (ブラウザで tailscale up)
+```
+
 ---
 
 ## 4. スキルのモード
