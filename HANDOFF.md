@@ -5,6 +5,37 @@
 
 ---
 
+## v0.5.0 (2026-07-06) — **Phase 1.7: 常時到達性 (Block E: sticky toggle-off + Block F: remote TCC) close** ✅
+
+`verify 9/9 PASS` 状態でも 2026-07-06 に「iPhone から Mac が offline に見える」実障害が発生 (Block E)。復旧後の初回スマホセッションで「繋がるが `ls` が Operation not permitted」(Block F) も顕在化。両方を同日中に research → 実装 → 実機検証 → リリース。
+
+### Phase 1.7 DoD
+
+- [x] 即時復旧: `Tailscale up` で `WantRunning=false` → online (16:12 JST)
+- [x] `scripts/tailscale-watchdog.sh` + `scripts/setup-tailscale-watchdog.sh` + plist template 新規 (dry-run default / idempotent / pause escape hatch)
+- [x] `verify-tier1.sh` 項目 10 (watchdog loaded) + 項目 11 (remote TCC probe) で 11 項目化
+- [x] `doctor.sh` L10/L11 追加で 11 層化
+- [x] docs 全層更新 (README ×2 / QUICKSTART / SKILL / setup-tier1 §11-13 / troubleshooting §L1・§L2 / install-tier1 advisory)
+- [x] **HG-5 (Mac 側)**: `Tailscale down` → watchdog 手動実行 → Running 復旧 / pause 中は Stopped 維持 / resume 後復旧 — 全パス実機 PASS
+- [x] **HG-5 (launchd 経由)**: LaunchAgent ロード後、`tailscale down` → 2 分以内に自動復旧するか (適用セッションで検証)
+- [ ] **HG-5 (iPhone 実機、次回外出時)**: iPhone Tailscale アプリで Mac が online 表示 → Termius 接続 → `ls ~/Documents` が通る (Block F の GUI トグル ON 後)
+
+### 落とし穴 (このリリースで学んだこと — 再発防止のため必読)
+
+1. **launchd 環境では Tailscale CLI が GUI モード起動を試みて exit 0 で死ぬ**。`TAILSCALE_BE_CLI=1` + `TERM=dumb` が必須 (plist EnvironmentVariables + script export の二重化済み)。手動テストで動いても launchd で動く保証はない — `--run-once` と launchd 実行の両方を検証すること
+2. **`tailscale status` の exit code は Stopped と NeedsLogin を区別できない**。`status --json` の `BackendState` 文字列パースが唯一の正解 (Stopped でも exit 0 なので exit code は使うな)
+3. **素の `tailscale up` は prefs を保持する** (simpleUp パス)。フラグを 1 つでも足すと unspecified prefs がリセットされる罠 — watchdog からは絶対にフラグを足さない
+4. **リモート FDA トグルに CLI は存在しない** (TCC)。GUI: System Settings → 共有 → リモートログイン → ⓘ → 「リモートユーザーにフルディスクアクセスを許可」。反映は新規セッションから
+5. `pmset autorestart` は Apple Silicon MacBook 非対応 (`pmset -g cap` で確認可能)
+
+### 残タスク (次セッション)
+
+- iPhone 実機 HG-5 (上記)
+- v0.4.0 から持ち越し: iPhone Termius mosh 接続中に `pgrep mosh-server` が PID を返す検証
+- Phase 2 候補: 「BackendState=Running だが実疎通なし」の第 2 段 probe (`.Self.Online` + down/up recycle)、`PushNotification` で `[NEEDS-HUMAN]` をスマホに通知、syspolicy `AlwaysOn` 層の実験 (setup-tier1 §12-6)
+
+---
+
 ## v0.4.0 (2026-04-30) — **Phase 1.6: 本番盲点 2 件 (Block A/D) close** ✅
 
 v0.3.0 (Phase 1.5) リリース後、`verify-tier1.sh 6/6 PASS` 状態で iPhone から繋がらない・mosh の利点が効かない 2 件の本番盲点が顕在化。Phase 1.6 はこれを verify/doctor/install/docs 全層で close した。

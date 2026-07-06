@@ -1,9 +1,9 @@
-# QUICKSTART — 5 分で Phase 1.6 を試す
+# QUICKSTART — 5 分で Phase 1.7 を試す
 
 > 詳しい解説・毎日の使用フロー・モード一覧は [`README.md`](./README.md) を参照。
 > このファイルは「迷わず動かす」ための最短経路。
 
-> この 10 ステップで 5 層 (🔐トンネル → 🗝️鍵付きドア → 🎣ケーブル → 📦ボックス → 💤 sleep guard) を順に組みます。
+> このステップで 6 層 (🔐トンネル → 🗝️鍵付きドア → 🎣ケーブル → 📦ボックス → 💤 sleep guard → 🐕 connection guard) を順に組みます。
 
 ## 前提条件
 
@@ -108,6 +108,32 @@ pmset -g assertions | grep 'caffeinate.*asserting forever'
 # display assertion は出ない (-d 未使用、電力節約のため)
 ```
 
+## Step 5.6. Tailscale を常時接続に固定 (Phase 1.7: 🐕 connection guard)
+
+macOS の Tailscale トグルは **sticky** — 一度 OFF にする (または `tailscale down` する) と再起動後も OFF のまま永続し、iPhone から Mac が完全に見えなくなる (Block E)。watchdog LaunchAgent が 2 分間隔で監視し、Stopped を検出したら自動で `Tailscale up` する。
+
+```bash
+# dry-run
+./scripts/setup-tailscale-watchdog.sh
+
+# 適用 (idempotent、再実行安全)
+./scripts/setup-tailscale-watchdog.sh --apply
+```
+
+意図的に Tailscale を切りたい時は先に pause する (期限付き、自動復帰):
+
+```bash
+./scripts/setup-tailscale-watchdog.sh --pause 2   # 2 時間
+./scripts/setup-tailscale-watchdog.sh --resume    # 早めに戻す
+```
+
+動作確認:
+
+```bash
+./scripts/setup-tailscale-watchdog.sh --status
+./scripts/setup-tailscale-watchdog.sh --run-once
+```
+
 ## Step 5.7. ~/.zshenv で mosh-server を SSH 経由で見つけられるようにする
 
 iPhone Termius で「Use Mosh: ON」にしても、Mac 側に SSH command-exec の PATH が通っていないと **silent fallback で plain SSH** になり、mosh の利点 (ネットワーク切替時の roaming, スリープ復帰) が効かない。Apple Silicon の Homebrew が `mosh-server` を `/opt/homebrew/bin` に置くため、`~/.zprofile` (login shell 専用) では足りず、`~/.zshenv` (全 invocation 種別が読む) に brew shellenv を置く必要がある。
@@ -128,6 +154,19 @@ ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
 
 **Why**: 詳細は `references/troubleshooting.md` §L3「Termius が Mosh ラベルでも mosh-server プロセスが起動しない (silent SSH fallback)」を参照。
 
+## Step 5.8. リモートセッションにフルディスクアクセスを許可 (Block F 予防)
+
+SSH 接続は成功しても、macOS の TCC が `~/Desktop` / `~/Documents` / `~/Downloads` へのアクセスを `Operation not permitted` で拒否する (Block F)。GUI で 1 回だけ設定:
+
+```
+System Settings → 一般 → 共有 → リモートログイン → ⓘ (情報ボタン)
+  → 「リモートユーザーにフルディスクアクセスを許可」= ON
+```
+
+設定後は iPhone 側で切断→再接続。検証は Step 7 の verify 項目 11 で自動チェックされる。
+
+> ⚠️ この設定は「SSH 鍵が漏れた場合に読める範囲」を TCC 保護データ全体に広げる。トレードオフと狭い代替 (sshd-keygen-wrapper への個別 FDA) は `references/setup-tier1.md` §11、鍵ローテーションは `SECURITY.md` を参照。
+
 ## Step 6. iPhone 側 Termius で Host を追加 (アプリ自体はインストール済み前提)
 
 詳細手順は [`references/setup-tier1.md`](./references/setup-tier1.md) の Section 3-5 を参照。ざっくり:
@@ -140,13 +179,13 @@ ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
 6. Identity: Mac で作った SSH 鍵を選択 (なければ鍵生成の手順を別途実施)
 7. Save → タップして接続
 
-## Step 7. 疎通テスト (9 項目自動チェック)
+## Step 7. 疎通テスト (11 項目自動チェック)
 
 ```bash
 ./scripts/verify-tier1.sh
 ```
 
-全項目 PASS なら Phase 1.6 セットアップ完了。FAIL があれば次へ。
+全項目 PASS なら Phase 1.7 セットアップ完了。FAIL があれば次へ。
 
 ## Step 8. トラブル時
 
@@ -154,7 +193,7 @@ ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
 ./scripts/doctor.sh
 ```
 
-9 層 (Tailscale / SSH / mosh / tmux / Claude CLI / caffeinate / sshd reachable / Tailscale path / mosh discoverable + Termius advisory) の診断と修復提案が出る。
+11 層 (Tailscale / SSH / mosh / tmux / Claude CLI / caffeinate / sshd reachable / Tailscale path / mosh discoverable / Tailscale watchdog / remote FDA + Termius advisory) の診断と修復提案が出る。
 それでも解決しない場合は [`references/troubleshooting.md`](./references/troubleshooting.md) を参照。
 
 ---
@@ -168,6 +207,8 @@ ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'command -v mosh-server'
 | Tailscale ログインでブラウザが開かない | `sudo tailscale up --login-server=https://controlplane.tailscale.com` |
 | Termius で Mosh が選択肢に出ない | Termius Free tier で Mosh サポートが外れた可能性。`references/setup-tier1.md` の「Termius Free + Mosh 検証」節を確認 |
 | Mac がスリープで繋がらない | `./scripts/setup-caffeinate-launchd.sh --apply` で LaunchAgent を入れる (Phase 1.5)。Apple Silicon + 蓋閉じは `references/setup-tier1.md` §8-3 参照 |
+| iPhone の Tailscale アプリで Mac が offline (灰色) | Mac の Tailscale トグルが OFF のまま永続している (Block E)。`./scripts/setup-tailscale-watchdog.sh --apply` で自動復旧を仕込む。`references/troubleshooting.md` §L1 参照 |
+| 繋がるのに `ls ~/Documents` が Operation not permitted | TCC がリモートセッションをブロック (Block F)。System Settings → 共有 → リモートログイン → ⓘ → 「リモートユーザーにフルディスクアクセスを許可」ON → 再接続 |
 
 完了すれば、外出先から iPhone で保存済ホストをタップ一発で Mac の tmux に繋がる。
 (Termius 経由で接続時、バックグラウンドで `mosh user@macbook.tail-xxxxx.ts.net` 相当のコマンドが走る。)

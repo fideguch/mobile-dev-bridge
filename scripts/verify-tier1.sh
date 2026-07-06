@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-tier1.sh — 9-item smoke test for Tier 1 stack.
+# verify-tier1.sh — 11-item smoke test for Tier 1 stack.
 # Returns 0 if all pass, non-zero if any fail. Safe to re-run.
 set -uo pipefail
 # -e intentionally omitted: we collect failures across multiple layers and
@@ -17,7 +17,7 @@ fail() { printf '  [FAIL] %s\n' "$*"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 # warn() as needed for future non-blocking checks. WARN_COUNT is retained in
 # the summary output for backward compatibility with consumers that parsed it.
 
-echo "[verify-tier1] 9-item smoke test"
+echo "[verify-tier1] 11-item smoke test"
 echo
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -182,6 +182,70 @@ else
     pass "SSH command-exec resolves mosh-server at ${PROBE_OUT}"
   else
     fail "SSH command-exec cannot find mosh-server. Add to ~/.zshenv: eval \"\$(/opt/homebrew/bin/brew shellenv)\""
+  fi
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 10. Tailscale watchdog LaunchAgent (prevent sticky toggle-off / Block E)
+# ──────────────────────────────────────────────────────────────────────────
+# The macOS Tailscale connect toggle is STICKY: one "off" (GUI toggle or
+# `tailscale down`) persists across reboots (WantRunning=false). Items 1-9
+# can then all have PASSed yesterday while the Mac silently dropped off the
+# tailnet today. The watchdog LaunchAgent re-runs `Tailscale up` within ~2
+# minutes of any Stopped state. Discovered 2026-07-06 (Block E): iPhone saw
+# the Mac offline while caffeinate/sshd/mosh were all healthy.
+echo "10) Tailscale watchdog LaunchAgent (Phase 1.7)"
+WATCHDOG_PLIST="${HOME}/Library/LaunchAgents/com.mobile-dev-bridge.tailscale-watchdog.plist"
+WATCHDOG_TARGET="gui/$(id -u)/com.mobile-dev-bridge.tailscale-watchdog"
+if [ -f "${WATCHDOG_PLIST}" ] && launchctl print "${WATCHDOG_TARGET}" >/dev/null 2>&1; then
+  # "Loaded" is not "functional": launchctl print succeeds even when the
+  # plist's baked-in script path no longer exists (repo moved/deleted) —
+  # bash would then exit 127 every 2 min while this item false-PASSes.
+  # Extract the actual ProgramArguments script path and prove it exists.
+  WATCHDOG_SCRIPT_PATH="$(plutil -extract ProgramArguments.1 raw "${WATCHDOG_PLIST}" 2>/dev/null || true)"
+  if [ -n "${WATCHDOG_SCRIPT_PATH}" ] && [ -f "${WATCHDOG_SCRIPT_PATH}" ]; then
+    pass "Tailscale watchdog LaunchAgent loaded (${WATCHDOG_TARGET})"
+  else
+    fail "watchdog LaunchAgent loaded but its script is missing (${WATCHDOG_SCRIPT_PATH:-unparseable}) — repo moved? Re-run: ./scripts/setup-tailscale-watchdog.sh --apply"
+  fi
+else
+  fail "Tailscale watchdog not installed. Run: ./scripts/setup-tailscale-watchdog.sh --apply"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 11. Remote-session Full Disk Access (TCC / Block F)
+# ──────────────────────────────────────────────────────────────────────────
+# macOS TCC blocks SSH sessions from ~/Desktop, ~/Documents, ~/Downloads
+# ("Operation not permitted") unless System Settings → General → Sharing →
+# Remote Login → ⓘ → "Allow full disk access for remote users" is ON.
+# The connection itself works, so items 1-10 all PASS while real work from
+# the iPhone hits permission walls. Discovered 2026-07-06 (Block F): first
+# real phone session after Block E recovery could not `ls` protected dirs.
+# Probe distinguishes TCC ("Operation not permitted") from a missing dir
+# ("No such file or directory") — only the former is a failure.
+echo "11) Remote-session Full Disk Access (TCC probe via SSH)"
+if [ -z "${SSH_KEY}" ]; then
+  fail "No SSH private key found — cannot probe remote-session TCC (re-run after item 5)"
+elif ! grep -q 'ssh-' "${HOME}/.ssh/authorized_keys" 2>/dev/null; then
+  fail "authorized_keys empty/missing — cannot self-probe (see item 5 hints)"
+else
+  # The trailing sentinel proves the probe actually executed remotely.
+  # Without it this check fails OPEN: a connection/auth/remote-shell failure
+  # yields empty output, which contains no error string and would PASS.
+  # (Example: a fish login shell rejects the POSIX for-loop syntax entirely.)
+  TMP_KH="$(mktemp -t mdb-verify-kh.XXXXXX)"
+  TCC_OUT="$(ssh -i "${SSH_KEY}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="${TMP_KH}" -o ConnectTimeout=5 \
+    "$(id -un)@127.0.0.1" \
+    'for d in Desktop Documents Downloads; do ls "$HOME/$d" >/dev/null 2>&1 || ls "$HOME/$d" 2>&1; done; echo __MDB_TCC_PROBE_RAN__' \
+    2>/dev/null)"
+  rm -f "${TMP_KH}"
+  if printf '%s\n' "${TCC_OUT}" | grep -q 'Operation not permitted'; then
+    fail "SSH sessions are TCC-blocked from Desktop/Documents/Downloads. System Settings → General → Sharing → Remote Login → ⓘ → 'Allow full disk access for remote users' = ON"
+  elif printf '%s\n' "${TCC_OUT}" | grep -q '__MDB_TCC_PROBE_RAN__'; then
+    pass "SSH sessions can access TCC-protected folders (remote Full Disk Access OK)"
+  else
+    fail "TCC probe could not run (SSH command-exec failed) — cannot verify remote Full Disk Access. Check items 5/7/9 first."
   fi
 fi
 

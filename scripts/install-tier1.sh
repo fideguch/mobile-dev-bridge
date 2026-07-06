@@ -66,11 +66,26 @@ cat <<'PRELIM'
   fails — verify-tier1.sh items 1–6 can all PASS while the Mac is
   fundamentally unreachable. This is the #1 production blind spot.
 
-  You may also try the CLI:
+  While you are on that screen, also click the ⓘ (info) button next to
+  Remote Login and enable:
+
+      "Allow full disk access for remote users" = ON
+
+  Without it, SSH sessions from the iPhone get "Operation not permitted"
+  on ~/Desktop, ~/Documents, ~/Downloads (macOS TCC / Block F) — the
+  connection works but real work hits permission walls.
+
+  Tradeoff: this widens what a leaked SSH key can read to all TCC-protected
+  data. Acceptable here because TCP/22 is tailnet-only, but see
+  references/setup-tier1.md §11 for a narrower alternative and SECURITY.md
+  for key rotation on device loss.
+
+  You may also try the CLI for Remote Login:
       sudo systemsetup -setremotelogin on
 
   …but on macOS 13+ the CLI version requires Terminal to have Full Disk
   Access, and silently fails without it. The GUI path is more reliable.
+  (The full-disk-access-for-remote-users toggle has NO CLI at all.)
 
 PRELIM
 
@@ -176,4 +191,10 @@ cat <<'NEXT'
        elif [[ -x /usr/local/bin/brew ]]; then
          eval "$(/usr/local/bin/brew shellenv)"
        fi
+  9. Install the two keep-alive LaunchAgents (both dry-run by default):
+       ./scripts/setup-caffeinate-launchd.sh --apply      # Mac never sleeps
+       ./scripts/setup-tailscale-watchdog.sh --apply      # Tailscale never stays off
+     The second one closes Block E: the macOS Tailscale toggle is sticky —
+     one accidental "off" persists across reboots and makes this Mac
+     invisible to the iPhone until someone runs 'Tailscale up' by hand.
 NEXT

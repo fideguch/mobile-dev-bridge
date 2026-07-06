@@ -4,7 +4,7 @@
 
 - **Ongoing cost**: $0 / month (all free-tier)
 - **Target user**: Individual engineers whose primary machine is a Mac
-- **Phase 1.6**: Tier 1 stack (Termius Free + Tailscale + mosh + tmux) + caffeinate LaunchAgent (24/7 awake) + **production blind-spot patches (Block A: Remote Login + Block D: mosh PATH via `~/.zshenv`)**
+- **Phase 1.7**: Tier 1 stack (Termius Free + Tailscale + mosh + tmux) + caffeinate LaunchAgent (24/7 awake) + **Tailscale watchdog LaunchAgent (auto-reconnect within 2 min of a sticky toggle-off)** + remote-session TCC detection
 
 For full documentation (including metaphor diagram, daily-use flow, and mode reference), see the **Japanese [README.md](./README.md)**. This English version is intentionally abbreviated for GitHub discovery.
 
@@ -21,8 +21,9 @@ Solo developers who use a Mac as their primary workstation and want to continue 
 
 ## Status
 
-- **Version**: v0.4.0 — **Phase 1.6: production blind-spot patches** 🎉
-- **Phase**: Phase 1.6 closes two blind spots that survived Phase 1.5: (Block A) `verify-tier1.sh 6/6 PASS` could not detect Remote Login being OFF — every iPhone connection silently failed; (Block D) Apple Silicon `mosh-server` is at `/opt/homebrew/bin`, but SSH command-exec PATH excludes it, causing mosh clients to silently fall back to plain SSH. The fixes: 3 new verify items (sshd reachable / Tailscale path / mosh-server SSH-discoverable), Step 0 GUI advisory in install-tier1, and `templates/zshenv.template` (NOT `.zprofile`)
+- **Version**: v0.5.0 — **Phase 1.7: always-reachable tailnet (Block E + Block F)** 🎉
+- **Phase**: Phase 1.7 closes the two blind spots that survived Phase 1.6, both hit in production on 2026-07-06: (Block E) the macOS Tailscale connect toggle is **sticky** — one accidental "off" (menu-bar toggle or `tailscale down`) sets `WantRunning=false`, which persists across reboots; caffeinate/sshd/mosh all stay healthy while the iPhone sees the Mac as offline. A new watchdog LaunchAgent re-runs `Tailscale up` within ~2 minutes (with a `--pause` escape hatch for intentional disconnects). (Block F) macOS TCC blocks SSH sessions from `~/Desktop` / `~/Documents` / `~/Downloads` ("Operation not permitted") unless *Allow full disk access for remote users* is ON — the connection works, so nothing else detects it. New verify items 10 (watchdog loaded) and 11 (remote TCC probe)
+- **Phase 1.6 (v0.4.0)**: Block A (Remote Login off, silent fail) + Block D (mosh PATH via `~/.zshenv`) detection
 - **Flag rationale**: `-i -m -s` instead of the community's `-dimsu` — no `-d` (wastes display power on a headless SSH target), no `-u` (5-second display-wake trigger, wrong semantics for a daemon)
 - **Known limit**: Apple Silicon MacBooks enforce hardware lid-close sleep regardless of caffeinate. Use AC + lid open, or clamshell mode with an external display.
 - **Real-device verification**: v0.2.0 cleared all forge_ace gates + gatekeeper HG-5 (iPhone 15 + MacBook, 2026-04-22). v0.3.0 LaunchAgent reboot-persistence verification is queued for the next session.
@@ -38,7 +39,9 @@ cd ~/mobile-dev-bridge
 ./scripts/install-tier1.sh --apply               # actually install tailscale + mosh + tmux
 ./scripts/setup-caffeinate-launchd.sh            # dry-run the LaunchAgent installer (Phase 1.5)
 ./scripts/setup-caffeinate-launchd.sh --apply    # actually install the LaunchAgent
-./scripts/verify-tier1.sh                        # 9-item smoke test
+./scripts/setup-tailscale-watchdog.sh            # dry-run the Tailscale watchdog (Phase 1.7)
+./scripts/setup-tailscale-watchdog.sh --apply    # auto-reconnect Tailscale within 2 min
+./scripts/verify-tier1.sh                        # 11-item smoke test
 ```
 
 ## HARD-GATE rules

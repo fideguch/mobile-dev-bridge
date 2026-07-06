@@ -12,7 +12,7 @@ if [ ! -x "${VERIFY_SCRIPT}" ]; then
 fi
 
 echo "══════════════════════════════════════════════════════════════════════"
-echo " mobile-dev-bridge doctor — 9-layer diagnostic"
+echo " mobile-dev-bridge doctor — 11-layer diagnostic"
 echo "══════════════════════════════════════════════════════════════════════"
 echo
 
@@ -170,6 +170,56 @@ L9 — mosh-server SSH-discoverable FAIL (silent-fallback to plain SSH):
 
   See references/troubleshooting.md §L3.
 HINT_L9
+fi
+
+# L10: Tailscale watchdog LaunchAgent — verify-tier1 item 10
+if grep -q '10) Tailscale watchdog' "${TMP_OUT}" && grep -A1 '10) Tailscale watchdog' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<HINT_L10
+
+L10 — Tailscale watchdog LaunchAgent FAIL (sticky toggle-off unguarded):
+  Symptom this prevents: the macOS Tailscale connect toggle is sticky —
+  one accidental "off" (menu-bar toggle or 'tailscale down') persists
+  across reboots (WantRunning=false). The Mac then looks fine locally
+  (caffeinate/sshd/mosh all healthy) but is invisible to the iPhone.
+
+  - Install:        ./scripts/setup-tailscale-watchdog.sh --apply
+  - Dry-run first:  ./scripts/setup-tailscale-watchdog.sh
+  - Status check:   ./scripts/setup-tailscale-watchdog.sh --status
+  - Test now:       ./scripts/setup-tailscale-watchdog.sh --run-once
+  - Intentional off: ./scripts/setup-tailscale-watchdog.sh --pause 2  # hours
+  - launchctl:      launchctl print gui/$(id -u)/com.mobile-dev-bridge.tailscale-watchdog
+  - Watchdog log:   tail ~/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.log
+  If the log shows [NEEDS-HUMAN], Tailscale is logged out — run 'tailscale up'
+  in a terminal and complete browser re-auth (the watchdog cannot do this).
+  See references/setup-tier1.md §12 and references/troubleshooting.md §L1.
+HINT_L10
+fi
+
+# L11: Remote-session Full Disk Access (TCC) — verify-tier1 item 11
+if grep -q '11) Remote-session Full Disk Access' "${TMP_OUT}" && grep -A1 '11) Remote-session Full Disk Access' "${TMP_OUT}" | grep -q FAIL; then
+  cat <<'HINT_L11'
+
+L11 — Remote-session Full Disk Access FAIL (TCC blocks SSH sessions / Block F):
+  Symptom: iPhone connects fine, but `ls ~/Desktop`, `ls ~/Documents`,
+  `ls ~/Downloads` (and tools touching them) return "Operation not
+  permitted". The session works; TCC silently walls off protected folders.
+
+  Fix (GUI only — there is NO supported CLI for TCC):
+    System Settings → General → Sharing → Remote Login → ⓘ (info button)
+      → "Allow full disk access for remote users" = ON
+    Then reconnect from the iPhone (existing sessions keep the old grant).
+
+  Alternative (narrower): Privacy & Security → Full Disk Access →
+    add /usr/libexec/sshd-keygen-wrapper manually.
+
+  Security note: this widens what a leaked SSH key can read. Acceptable here
+  because TCP/22 is reachable only over the Tailscale tailnet (item 8), but
+  rotate keys promptly on any device loss — see SECURITY.md.
+
+  Verify after fix:
+    ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'ls ~/Desktop'
+  See references/troubleshooting.md §L2 (Block F).
+HINT_L11
 fi
 
 # Termius 📱 窓 (iOS-side advisory — always shown)

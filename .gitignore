@@ -28,3 +28,7 @@ tmp/
 
 # Local user-specific overrides
 local/
+
+# Point-in-time connection snapshots — contain real tailnet DNS names,
+# Tailscale IPs, device names, and login timestamps. Never commit.
+CONNECTION_STATUS.md

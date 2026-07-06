@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  mobile-dev-bridge Tailscale watchdog LaunchAgent (Phase 1.7).
+
+  Placeholders substituted at install time by scripts/setup-tailscale-watchdog.sh:
+    __HOME__            -> the installing user's $HOME (launchd does NOT expand ~)
+    __WATCHDOG_SCRIPT__ -> absolute path to scripts/tailscale-watchdog.sh in the
+                           cloned repo. Moving the repo requires re-running
+                           setup-tailscale-watchdog.sh with the apply flag.
+                           (XML comments cannot contain double hyphens.)
+
+  Design rationale (see references/setup-tier1.md §12):
+    StartInterval 120: launchd re-runs the short-lived check every 2 minutes.
+      Worst-case window between an accidental Tailscale toggle-off and auto-
+      reconnect is ~2 min. Intervals that would fire during sleep are SKIPPED
+      (kevent limitation, man launchd.plist), but the repeating timer resumes
+      on wake, so the next check still lands within 120s of wake.
+    NO KeepAlive: this is a periodic job, not a daemon. KeepAlive with
+      StartInterval would fight launchd's scheduler and risk respawn storms.
+    ProcessType Background: hints the scheduler this never needs user focus.
+    EnvironmentVariables TAILSCALE_BE_CLI=1 + TERM=dumb: REQUIRED. Under
+      launchd's bare environment the app-bundle Tailscale binary tries to
+      start in GUI mode and fails with "The Tailscale GUI failed to start"
+      while still EXITING 0 (verified on v1.96.5/1.98.8, 2026-07-06) — the
+      watchdog would silently self-neutralize. These two variables force
+      CLI mode. The watchdog script also exports them (belt + suspenders).
+
+  stdout/stderr here are a safety net for uncaught bash errors only; the
+  script writes its structured log to
+  ~/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.log (self-rotated).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mobile-dev-bridge.tailscale-watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__WATCHDOG_SCRIPT__</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>120</integer>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TAILSCALE_BE_CLI</key>
+        <string>1</string>
+        <key>TERM</key>
+        <string>dumb</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.err.log</string>
+</dict>
+</plist>

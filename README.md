@@ -2,11 +2,11 @@
 
 > スマホ (iPhone / iPad) から Mac の開発環境をシームレスに操作するための Claude Code スキル。
 > Tailscale + SSH + mosh + tmux + Claude Code CLI を無料で組み合わせ、自宅の MacBook をそのままモバイルから叩く。
-> **Phase 1.6 で 24/7 常時起動 LaunchAgent + 本番盲点 2 件の close を達成** — 手動 `caffeinate` 廃止、Remote Login + mosh PATH の盲点を verify 9 項目で検出可能に。
+> **Phase 1.7 で「Tailscale 常時接続 watchdog」を追加** — トグル OFF が再起動後も永続する macOS 仕様 (Block E) を LaunchAgent が 2 分以内に自動復旧。リモートセッションの TCC 制限 (Block F) も verify 11 項目で検出可能に。
 
 - **継続コスト**: $0 / 月 (iOS アプリ無料 + Tailscale 無料 + mosh OSS + tmux OSS)
 - **対象ユーザー**: Mac 主機で開発する個人エンジニア (初期は本人、将来チーム展開)
-- **Phase 1.6**: Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) + caffeinate LaunchAgent 24/7 + **Block A (Remote Login) / Block D (mosh PATH) の検出 9 項目化** のセットアップ支援・検証・診断
+- **Phase 1.7**: Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) + caffeinate LaunchAgent 24/7 + **Tailscale watchdog LaunchAgent (Block E: sticky toggle-off の自動復旧)** + **Block A/D/F 検出の verify 11 項目化** のセットアップ支援・検証・診断
 - **品質ゲート**: forge_ace Full (Writer / Guardian / Overseer / PM-Admin / Designer PASS) + gatekeeper HG-5 (v0.2.0 実機検証 PASS、v0.3.0 の LaunchAgent 実機検証は次セッション)
 
 詳細な計画書: `~/.claude/bochi-data/memos/2026-04-22-mobile-dev-bridge-skill-plan.md` (v2.1)
@@ -26,13 +26,14 @@
 | 🤖 **Claude Code CLI** | 「ボックスの中の**AI アシスタント**」 | tmux ボックスの中で動いてる Claude。実ファイルシステム (.env, git, Supabase キー) にアクセスできる |
 | 📱 **Termius (iOS)** | 「ボックスを覗く**窓**」 | iPhone 側のターミナルアプリ。Tailscale → SSH → mosh → tmux の順に繋ぎ、最終的に Mac の画面を iPhone に表示 |
 
-### 全体像 — 5 層の積み重ね
+### 全体像 — 6 層の積み重ね
 
 ```
 📱 iPhone (Termius)
    │  Tailscale P2P トンネル (WireGuard, 暗号化)
    ▼
 🔐 Tailscale MagicDNS (macbook.tail-xxxxx.ts.net)
+   │  ← 🐕 tailscale-watchdog LaunchAgent がトグル OFF を 2 分以内に自動復旧
    │  SSH ED25519 鍵認証
    ▼
 🖥️ MacBook (AC 接続・蓋オープン・LaunchAgent の caffeinate で 24/7 awake)
@@ -43,12 +44,12 @@
            └─ w2: supabase start
 ```
 
-**ポイント**: iPhone は「窓」、実体は MacBook 側で動き続ける。LaunchAgent 化された `caffeinate` が Mac を 24/7 awake 固定。tmux が画面を保持するので、iPhone を閉じても Claude Code は止まらない。
+**ポイント**: iPhone は「窓」、実体は MacBook 側で動き続ける。LaunchAgent 化された `caffeinate` が Mac を 24/7 awake 固定、**Tailscale watchdog LaunchAgent がトンネル自体の切断 (トグル OFF 永続化) を 2 分以内に自動復旧**。tmux が画面を保持するので、iPhone を閉じても Claude Code は止まらない。
 ⚠️ Apple Silicon + 蓋閉じはハードウェア磁気検知で強制 sleep になるため、AC + 蓋オープン運用、または clamshell mode (外部ディスプレイ + キーボード) が前提。
 
 ---
 
-## 1. QUICKSTART (5 分で Phase 1.6 を試す)
+## 1. QUICKSTART (5 分で Phase 1.7 を試す)
 
 **前提**:
 - Mac (macOS Ventura / 13+) に Homebrew が入っている
@@ -69,11 +70,15 @@ cd ~/mobile-dev-bridge
 # 出力を読んで問題なければ:
 ./scripts/install-tier1.sh --apply
 
-# 4. caffeinate LaunchAgent で Mac を 24/7 常時起動 (Phase 1.5 で導入、Phase 1.6 でも継続)
+# 4. caffeinate LaunchAgent で Mac を 24/7 常時起動 (Phase 1.5 で導入)
 ./scripts/setup-caffeinate-launchd.sh                    # dry-run
 ./scripts/setup-caffeinate-launchd.sh --apply            # install
 
-# 5. 疎通テスト (9 項目チェック、caffeinate LaunchAgent + Block A/D 含む)
+# 4.5. Tailscale watchdog LaunchAgent (Phase 1.7: トグル OFF を 2 分以内に自動復旧)
+./scripts/setup-tailscale-watchdog.sh                    # dry-run
+./scripts/setup-tailscale-watchdog.sh --apply            # install
+
+# 5. 疎通テスト (11 項目チェック、caffeinate + watchdog + Block A/D/E/F 含む)
 ./scripts/verify-tier1.sh
 
 # 6. Termius iOS での設定手順はこちらを読む
@@ -84,23 +89,23 @@ cat references/setup-tier1.md
 
 ---
 
-## 2. ファイル構成 (Phase 1.6 DoD と突き合わせ)
+## 2. ファイル構成 (Phase 1.7 DoD と突き合わせ)
 
-Phase 1.6 の Definition of Done を満たす構成。
+Phase 1.7 の Definition of Done を満たす構成。
 
 | 種別 | 個数 | ファイル | DoD 対応 |
 |------|-----|---------|---------|
 | ルート文書 | 9 | `README.md` / `README.en.md` / `CHANGELOG.md` / `CONTRIBUTING.md` / `SECURITY.md` / `QUICKSTART.md` / `HANDOFF.md` / `LICENSE` / `SKILL.md` | QUICKSTART が読める (DoD #3) |
 | インストーラー | 2 | `install.sh` / `uninstall.sh` | シンボリックリンク作成 (DoD #1) |
-| Scripts | 4 | `scripts/install-tier1.sh` / `scripts/verify-tier1.sh` / `scripts/doctor.sh` / `scripts/setup-caffeinate-launchd.sh` | 疎通 9 項目 + 診断 9 層 + 24/7 awake (DoD #1, #2, #4, #5, #6) |
+| Scripts | 6 | `scripts/install-tier1.sh` / `scripts/verify-tier1.sh` / `scripts/doctor.sh` / `scripts/setup-caffeinate-launchd.sh` / `scripts/setup-tailscale-watchdog.sh` / `scripts/tailscale-watchdog.sh` | 疎通 11 項目 + 診断 11 層 + 24/7 awake + 常時接続 (DoD #1, #2, #4, #5, #6, #7) |
 | References | 3 | `references/setup-tier1.md` / `references/security.md` / `references/troubleshooting.md` | iOS/Mac 両側手順 (DoD #3) |
-| Templates | 3 | `templates/tmux.conf.template` / `templates/com.mobile-dev-bridge.caffeinate.plist.template` / `templates/zshenv.template` | tmux 設定 + LaunchAgent + brew shellenv (DoD #1, #6) |
+| Templates | 4 | `templates/tmux.conf.template` / `templates/com.mobile-dev-bridge.caffeinate.plist.template` / `templates/com.mobile-dev-bridge.tailscale-watchdog.plist.template` / `templates/zshenv.template` | tmux 設定 + LaunchAgent ×2 + brew shellenv (DoD #1, #6, #7) |
 | CI | 1 | `.github/workflows/shellcheck.yml` | shellcheck + plist xmllint で即 fail (P8) |
 | Tests placeholder | 1 | `tests/.gitkeep` | Phase 1.1 polish で bats-core 導入 |
 
-**合計**: scripts=4, references=3, templates=3, root docs=9。v0.2.0 からの diff: +1 script, +2 templates。
+**合計**: scripts=6, references=3, templates=4, root docs=9。v0.4.0 からの diff: +2 scripts, +1 template。
 
-### Phase 1.6 で扱わないもの (明示的 defer)
+### Phase 1.7 で扱わないもの (明示的 defer)
 
 - Claude iOS app `remote-control` 統合 → Phase 2
 - code-server (Tier 2) → Phase 3
@@ -133,9 +138,10 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 | 「スマホから開発したい」「iPhone で Claude Code」 | **Assess** | 現環境ヒアリング → Tier 提案 |
 | 「Tailscale セットアップして」 | **Install (Mac)** | `install-tier1.sh` を dry-run 提示 → 承認後実行 |
 | 「Mac を 24/7 起きたまま」「caffeinate」 | **Install (caffeinate)** | `setup-caffeinate-launchd.sh` を dry-run 提示 → 承認後実行 |
+| 「Tailscale が勝手に切れてた」「スマホから見ると offline」 | **Install (tailscale-watchdog)** | `setup-tailscale-watchdog.sh` を dry-run 提示 → 承認後実行 |
 | 「Termius の設定教えて」 | **Install (iOS guide)** | `references/setup-tier1.md` の iOS 手順を提示 |
-| 「スマホから繋がるか確認して」 | **Verify** | `verify-tier1.sh` 実行 → 9 項目チェック |
-| 「mosh が切れる」「繋がらない」「Mac が寝る」 | **Troubleshoot** | `doctor.sh` 実行 → 9 層診断 |
+| 「スマホから繋がるか確認して」 | **Verify** | `verify-tier1.sh` 実行 → 11 項目チェック |
+| 「mosh が切れる」「繋がらない」「Mac が寝る」 | **Troubleshoot** | `doctor.sh` 実行 → 11 層診断 |
 | 「新しい手法出てる？」 | **Upgrade** | 最新動向評価 (Phase 4 で実装) |
 
 ---
@@ -155,7 +161,8 @@ Claude に自然言語で話しかけると、以下のモードが起動する:
 
 ## 6. 開発ステータス
 
-- **現在**: v0.4.0 — **Phase 1.6: production blind-spot patches (Block A: Remote Login / Block D: mosh PATH)** 🎉 `verify-tier1.sh 6/6 PASS` でも本番盲点で iPhone から繋がらない・mosh の利点が効かない 2 件を verify/doctor/install/docs 全層で close。`verify` を 9 項目化、`doctor` を 9 層化。Phase 1.5 の caffeinate LaunchAgent は引き続き有効。
+- **現在**: v0.5.0 — **Phase 1.7: 常時到達性 (Block E: sticky toggle-off / Block F: remote TCC)** 🎉 macOS の Tailscale トグル OFF は再起動後も永続し、caffeinate/sshd/mosh が全部 healthy でも iPhone からは offline に見える (Block E, 2026-07-06 実障害)。watchdog LaunchAgent が 2 分以内に `Tailscale up` で自動復旧。さらに SSH セッションが TCC で `~/Documents` 等を読めない Block F を検出する項目を追加し、`verify` を 11 項目化、`doctor` を 11 層化。
+- **v0.4.0**: Phase 1.6 — Block A (Remote Login) / Block D (mosh PATH) close、verify 9 項目化
 - **次 (Phase 1.1 polish)**: install-tier1.sh に brew-cask 案内追加、QUICKSTART に「Tailscale ≠ Termius」「http:// 不要」警告、`tests/` bats-core 導入
 - **将来 Phase**: Claude iOS 連携 (Phase 2) → code-server (Phase 3) → Upgrade サイクル (Phase 4)
 

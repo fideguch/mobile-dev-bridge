@@ -19,6 +19,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moshi webhook / push notification bridge (event names only)
 - Upgrade review protocol (annual)
 
+## [0.5.0] — 2026-07-06 — **Phase 1.7: 常時到達性 (Block E: sticky toggle-off + Block F: remote TCC)**
+
+v0.4.0 の `verify-tier1.sh 9/9 PASS` 状態でも、2026-07-06 に「iPhone の Tailscale アプリから Mac が offline に見えて接続不能」という実障害が発生した。caffeinate / sshd / mosh は全部 healthy — 原因は Tailscale の接続トグル OFF が永続化していたこと (Block E)。さらに復旧後の初回スマホセッションで「接続はできるが `ls` が Operation not permitted」という第 2 の盲点 (Block F) も顕在化。Phase 1.7 はこの 2 件を watchdog/verify/doctor/install/docs 全層で close する。
+
+### Added
+- `scripts/tailscale-watchdog.sh` — 2 分間隔で `BackendState` を監視する watchdog 本体。`Stopped` なら `Tailscale up` (perl-alarm による 45s タイムアウト付き)、daemon 無応答なら `open -gja Tailscale` でアプリ再起動、`NeedsLogin` は `[NEEDS-HUMAN]` としてログに記録 (自動修復しない)。healthy tick は無音 (遷移時のみログ)、512KB 自動ローテーション、期限付き pause ファイル対応
+- `scripts/setup-tailscale-watchdog.sh` — dry-run デフォルトのインストーラー。`--apply` / `--uninstall` / `--status` / `--run-once` / `--pause [hours]` / `--resume`。`launchctl bootstrap gui/$UID` + quarantine xattr 除去 + `plutil -lint`、idempotent (setup-caffeinate-launchd.sh と同型)
+- `templates/com.mobile-dev-bridge.tailscale-watchdog.plist.template` — `StartInterval 120` / `RunAtLoad` / KeepAlive なし (periodic job に KeepAlive は誤用) / **`EnvironmentVariables` に `TAILSCALE_BE_CLI=1` + `TERM=dumb` (必須、下記 Research 参照)**
+- `scripts/verify-tier1.sh` — 新規 2 項目を追加して 9→11 項目化:
+  - **項目 10**: Tailscale watchdog LaunchAgent がロード済みか。Block E の検出
+  - **項目 11**: SSH セッションが TCC 保護フォルダ (Desktop/Documents/Downloads) にアクセスできるか。`Operation not permitted` (TCC) と `No such file or directory` (非存在) を区別して判定。Block F の検出
+- `scripts/doctor.sh` — L10 (watchdog FAIL hint)、L11 (remote FDA FAIL hint) を追加、11 層化
+- `references/setup-tier1.md` — §11 (リモート FDA / Block F)、§12 (Tailscale watchdog / Block E、pause 運用、カバー範囲の正直な表、§12-6 任意の syspolicy 追加層)、§13 (旧 §11 参考ソースを繰り下げ)
+- `references/troubleshooting.md` — §L1 に Block E セクション (WantRunning/LoggedOut の切り分け表 + iPhone 側 stale 表示の注意)、§L2 に Block F セクション。タイトル 9→11-Layer
+- `QUICKSTART.md` — Step 5.6 (watchdog)、Step 5.8 (remote FDA GUI トグル)、詰まりどころ 2 行追加
+- `scripts/install-tier1.sh` — Step 0 advisory に「リモートユーザーにフルディスクアクセスを許可」を追加、NEXT に Step 9 (LaunchAgent ×2 導入) を追加
+
+### Changed
+- **BREAKING (minor, 0.x SemVer §4 で許容)** `verify-tier1.sh` バナー: `9-item` → `11-item smoke test`。項目 10/11 は FAIL 扱い (v0.3.0 の項目 6 昇格、v0.4.0 の項目 7-9 追加と同型の前進)
+- `SKILL.md` Phase 1.6 → **Phase 1.7**。Mode Router に `Install (tailscale-watchdog)` 追加、DoD 6 → 7 項目 (新 #7: launchd 経由の watchdog 自動復旧実機検証)
+- `README.md` / `README.en.md`: v0.5.0 / Phase 1.7 / 11 項目 / 11 層 / scripts=6, templates=4 に更新
+
+### Research / design decisions (multi-agent research + 実機検証済み)
+- **`Tailscale up` (フラグなし) の安全性**: v1.96.5+ の simpleUp パスは `WantRunning=true` を立てるだけで他の prefs に触れない (ヘルプに明記 + 本リポの参照 Mac で `RouteAll`/`CorpDNS` が保持されることを実測)。フラグを 1 つでも足すと prefs リセットの罠があるため**素の `up` のみ**を使う
+- **検出は exit code ではなく `status --json` の `BackendState` 文字列**: `tailscale status` は Stopped と NeedsLogin をどちらも exit 1 で返し区別不能、`status --json` は Stopped でも exit 0。文字列パースが唯一の正しい判別法。jq は Ventura に無いため grep/sed で抽出 (依存ゼロ)
+- **CRITICAL — launchd 環境の GUI-mode 罠**: 素の環境 (TERM/TTY なし) では app バンドルの `Tailscale` バイナリが CLI ではなく **GUI 起動を試みて "The Tailscale GUI failed to start" を出しつつ exit 0** する (実機確認)。`TAILSCALE_BE_CLI=1` + `TERM=dumb` を plist と script の両方に設定して回避。これがないと watchdog は「導入済みに見えて何もしない」状態で silent fail する
+- **StartInterval のスリープ挙動**: sleep 中の発火はスキップされる (`man launchd.plist` の kevent 制約) が、タイマーは wake 後に再開するため wake から最大 120s で次チェックが走る
+- **launchd は同一ジョブの多重起動をしない**: 前回実行中なら発火をスキップするため lockfile 不要
+- **公式ポリシー層 (`syspolicy`)**: `Tailscale syspolicy list` で `AlwaysOn.Enabled` 等の存在を実機確認。sudo 必須 + pause UX と競合するため主層にはせず、§12-6 で任意の追加強化として文書化 (research verdict: "two layers, both available")
+- **`pmset autorestart`**: Apple Silicon MacBook では `pmset -g cap` に出ない = 非対応 (実機確認)。docs から削除し「停電復帰は不可」と正直に記載
+- **escape hatch**: pause は期限付きファイル (`~/.config/mobile-dev-bridge/watchdog.pause` に復帰 epoch)。期限切れで自動 enforcement 再開 — 「pause 忘れで翌日繋がらない」事故を構造的に排除
+
+### Root-cause of the bugs that triggered this release
+- **Block E (2026-07-06 16:11 JST)**: iPhone の Tailscale アプリで Mac (`fideguch`) が offline 表示。HG-3 facts: Mac 側 `Tailscale status` → `Tailscale is stopped.`、`debug prefs` → `WantRunning: false, LoggedOut: false` (= トグル OFF の永続化、認証は生存)。caffeinate LaunchAgent は 650h+ 稼働中、TCP/22 到達可、network extension 稼働中 — **既存 9 項目の verify では原理的に検出不能** (verify 実行時に Tailscale が up なら PASS するが、実障害は「いつの間にか down になっていた」こと自体)。`Tailscale up` 一発で復旧
+- **Block F (同日、復旧直後)**: スマホから接続成功後、`ls` が permission エラー。HG-3 facts: loopback SSH probe で `~/Desktop` / `~/Documents` / `~/Downloads` が `Operation not permitted`、home 直下は OK → TCC のリモートセッション制限と確定
+- **HG-5 (Mac 側実機検証、本リリース内で完了)**: `Tailscale down` → watchdog 手動実行 → `BackendState=Running` 復旧 / pause 中は `Stopped` を維持 (enforcement 停止を確認) → `--resume` 後に復旧。**launchd 経由の E2E も PASS**: 16:36:26 `down` → 16:38:09 launchd 発火 → 16:38:11 Running (110 秒、約束の 2 分以内)
+- **4-lens adversarial review (21 agents)**: 17 findings 中 16 confirmed → 全て修正。主要: verify 項目 11 の fail-open (sentinel 3 値判定化)、launchd PATH に brew が無く fallback が死んでいた件 (明示パスチェーン化)、sed 置換の `&` メタ文字による plist 静音破損 (bash 置換 + plutil 逆抽出検証化)、`--pause 010` の octal 事故 (`10#` 強制)、`CONNECTION_STATUS.md` の gitignore 追加
+
+### Migration guide (0.4.x → 0.5.0)
+```bash
+cd ~/mobile-dev-bridge
+git pull
+# 1. watchdog LaunchAgent を導入
+./scripts/setup-tailscale-watchdog.sh          # dry-run で内容確認
+./scripts/setup-tailscale-watchdog.sh --apply
+# 2. リモート FDA を GUI で ON (CLI 不可)
+#    System Settings → 一般 → 共有 → リモートログイン → ⓘ
+#      → 「リモートユーザーにフルディスクアクセスを許可」= ON
+# 3. 検証
+./scripts/verify-tier1.sh   # 11/11 PASS が期待値
+```
+
+### Known limitations (do not report as bugs)
+- watchdog は `NeedsLogin` (ログアウト状態) を自動修復しない — ブラウザ再認証は人間が必要。Admin Console で「Disable key expiry」を設定しておくと予防できる
+- FileVault 有効 Mac の再起動直後 (pre-boot) は LaunchAgent もネットワークも動かない — 物理パスワード入力が必要
+- Apple Silicon MacBook は停電からの自動復帰不可 (`pmset autorestart` 非対応)
+- 項目 11 の TCC probe は SSH 鍵 + authorized_keys が前提 (項目 5/9 と同じ)
+
 ## [0.4.0] — 2026-04-30 — **Phase 1.6: 本番盲点 2 件の close (Block A: Remote Login + Block D: mosh PATH)**
 
 v0.3.0 の Phase 1.5 (caffeinate LaunchAgent) リリース後、`verify-tier1.sh 6/6 PASS` の状態でも iPhone Termius 接続が機能しない・mosh の利点が効かないという 2 件の本番盲点が顕在化した。Phase 1.6 はこの 2 件を verify/doctor/install/docs 全層で恒久的に close する。

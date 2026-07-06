@@ -18,7 +18,7 @@ triggers:
 # mobile-dev-bridge — Claude Code Skill
 
 > iPhone / iPad から自宅の Mac をそのまま操作するスキル。クラウド VM ではなく本物の MacBook を使う。
-> Phase 1.6 は Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) + **24/7 常時起動 LaunchAgent** のセットアップ支援・検証・診断。
+> Phase 1.7 は Tier 1 スタック (Termius Free + Tailscale + mosh + tmux) + **24/7 常時起動 LaunchAgent + Tailscale 常時接続 watchdog** のセットアップ支援・検証・診断。
 > 継続コスト $0 / 月。
 
 ## Design principles (PM Operator Stance 採用 — 思想のみ)
@@ -67,9 +67,10 @@ triggers:
 | **Assess** | 初回 or 再評価 | 現環境ヒアリング (Mac 機種 / iOS 機種 / 既存 VPN) → Tier 提案 → shopping list 提示 | `README.md` §0, §1 |
 | **Install (Mac)** | ユーザー承認済 | `scripts/install-tier1.sh` を **dry-run で提示** → 承認後 `--apply` 実行 | `scripts/install-tier1.sh` |
 | **Install (caffeinate)** | install-tier1 後 | `scripts/setup-caffeinate-launchd.sh` を **dry-run で提示** → 承認後 `--apply` 実行。LaunchAgent 化で 24/7 常時起動 | `scripts/setup-caffeinate-launchd.sh`, `templates/com.mobile-dev-bridge.caffeinate.plist.template` |
+| **Install (tailscale-watchdog)** | install-tier1 後 | `scripts/setup-tailscale-watchdog.sh` を **dry-run で提示** → 承認後 `--apply` 実行。sticky toggle-off (Block E) を 2 分以内に自動復旧。`--pause/--resume` で意図的切断にも対応 | `scripts/setup-tailscale-watchdog.sh`, `scripts/tailscale-watchdog.sh`, `templates/com.mobile-dev-bridge.tailscale-watchdog.plist.template` |
 | **Install (iOS guide)** | Mac 側完了 | Tailscale iOS / Termius iOS の設定を**手順書形式**で提示 (スキルは iOS 操作不可) | `references/setup-tier1.md` §3-5 |
-| **Verify** | install 後 | `scripts/verify-tier1.sh` 実行 → 9 項目チェック (Tailscale up / mosh loopback / tmux / claude CLI / SSH key / caffeinate LaunchAgent / sshd reachable / Tailscale path / mosh discoverable) | `scripts/verify-tier1.sh` |
-| **Troubleshoot** | エラー発生時 | `scripts/doctor.sh` 実行 → 9 層診断 (Tailscale / SSH / mosh / tmux / Claude CLI / caffeinate / sshd / Tailscale path / mosh discoverable) → 症状別修復提案 | `scripts/doctor.sh`, `references/troubleshooting.md` |
+| **Verify** | install 後 | `scripts/verify-tier1.sh` 実行 → 11 項目チェック (Tailscale up / mosh loopback / tmux / claude CLI / SSH key / caffeinate LaunchAgent / sshd reachable / Tailscale path / mosh discoverable / Tailscale watchdog / remote FDA) | `scripts/verify-tier1.sh` |
+| **Troubleshoot** | エラー発生時 | `scripts/doctor.sh` 実行 → 11 層診断 (Tailscale / SSH / mosh / tmux / Claude CLI / caffeinate / sshd / Tailscale path / mosh discoverable / Tailscale watchdog / remote FDA) → 症状別修復提案 | `scripts/doctor.sh`, `references/troubleshooting.md` |
 | **Upgrade** (Phase 4) | 新手法登場時 | Moshi / Claude Code 新機能 / Tailscale 新機能を評価 → 既存構成への影響判定 → 移行判断 | — |
 
 ---
@@ -120,6 +121,24 @@ Phase 1.5 で追加。Mac を 24/7 常時起動状態に固定する LaunchAgent
 
 ---
 
+## Mode: Install (tailscale-watchdog)
+
+Phase 1.7 で追加。macOS の Tailscale トグル OFF (`WantRunning=false`) は再起動後も永続し、caffeinate/sshd/mosh が全部 healthy でも iPhone から Mac が見えなくなる (Block E, 2026-07-06 実障害)。watchdog LaunchAgent で自動復旧を仕込む:
+
+1. `./scripts/setup-tailscale-watchdog.sh` を **dry-run** で実行、出力をユーザーに提示
+2. ユーザー承認で `./scripts/setup-tailscale-watchdog.sh --apply` 実行
+3. `~/Library/LaunchAgents/com.mobile-dev-bridge.tailscale-watchdog.plist` を配置し `launchctl bootstrap gui/$UID` でロード
+4. `scripts/tailscale-watchdog.sh` が 2 分間隔で `BackendState` を監視、`Stopped` なら `Tailscale up` (素の up は既存 prefs 保持を実機検証済み)
+5. `NeedsLogin` は自動修復しない — ログに `[NEEDS-HUMAN]` を記録 (再認証は人間のみ)
+
+**HARD-GATE**: launchd 環境では `TAILSCALE_BE_CLI=1` + `TERM=dumb` が必須 (ないと app バイナリが GUI モード起動を試みて exit 0 で silent fail)。plist と script の両方に設定済み — 除去しないこと。
+
+**escape hatch**: ユーザーが意図的に Tailscale を切りたい場合は `--pause [hours]` (デフォルト 6h、期限付き自動復帰) → 作業後 `--resume`。pause しっぱなし事故は構造的に起きない。
+
+**idempotent**: 再実行安全。`--status` / `--run-once` で状態確認・即時テスト可能。
+
+---
+
 ## Mode: Install (iOS guide)
 
 iOS 側の設定はスキルが直接操作できないため、**手順書を提示するだけ**:
@@ -134,7 +153,7 @@ iOS 側の設定はスキルが直接操作できないため、**手順書を�
 
 ## Mode: Verify
 
-`./scripts/verify-tier1.sh` を実行し、9 項目チェック:
+`./scripts/verify-tier1.sh` を実行し、11 項目チェック:
 
 1. Tailscale が `up` 状態か (`tailscale status` 成功)
 2. mosh-server がローカルホスト経由で起動確認できるか
@@ -145,8 +164,10 @@ iOS 側の設定はスキルが直接操作できないため、**手順書を�
 7. Remote Login (sshd) が TCP/22 でループバック到達可能か (**Phase 1.6 GATE: FAIL 扱い**)
 8. Tailscale IPv4 経由で TCP/22 が到達可能か (実際 iPhone が通る経路、**Phase 1.6 GATE: FAIL 扱い**)
 9. SSH command-exec で `mosh-server` が解決できるか (silent SSH fallback の検出、**Phase 1.6 GATE: FAIL 扱い**)
+10. Tailscale watchdog LaunchAgent がロード済か (sticky toggle-off / Block E 対策、**Phase 1.7 GATE: FAIL 扱い**)
+11. リモートセッションが TCC 保護フォルダにアクセスできるか (Block F の検出、**Phase 1.7 GATE: FAIL 扱い**)
 
-全 PASS で「Phase 1.6 セットアップ完了候補」、1 つでも FAIL なら Troubleshoot へ自動ルーティング。
+全 PASS で「Phase 1.7 セットアップ完了候補」、1 つでも FAIL なら Troubleshoot へ自動ルーティング。
 
 **HARD-GATE**: この時点ではまだ「完了」宣言しない。gatekeeper HG-5 の実機検証 (実 iPhone で mosh 接続) が PASS して初めて DoD 達成。
 
@@ -154,7 +175,7 @@ iOS 側の設定はスキルが直接操作できないため、**手順書を�
 
 ## Mode: Troubleshoot
 
-`./scripts/doctor.sh` を実行し、9 層診断:
+`./scripts/doctor.sh` を実行し、11 層診断:
 
 | Layer | 検査内容 | 失敗時の見るべきファイル |
 |-------|---------|-----------------------|
@@ -167,6 +188,8 @@ iOS 側の設定はスキルが直接操作できないため、**手順書を�
 | L7 Remote Login (sshd) | `nc -z 127.0.0.1 22`、System Settings → 共有 → リモートログイン | `references/troubleshooting.md` §L2 |
 | L8 Tailscale ↔ sshd path | `nc -z <TS_IP> 22`、Firewall、Tailscale ACL | `references/troubleshooting.md` §L1, §L2 |
 | L9 mosh discoverable | SSH command-exec PATH、`~/.zshenv` brew shellenv | `references/troubleshooting.md` §L3 |
+| L10 Tailscale watchdog | LaunchAgent ロード状態、watchdog log、`BackendState` | `references/troubleshooting.md` §L1 (Block E), `references/setup-tier1.md` §12 |
+| L11 remote FDA (TCC) | SSH 経由の保護フォルダ probe、「リモートユーザーにフルディスクアクセスを許可」 | `references/troubleshooting.md` §L2 (Block F), `references/setup-tier1.md` §11 |
 | 📱 Termius config (advisory) | (iOS 側は手動確認) | `references/troubleshooting.md` §L7 |
 
 gatekeeper HG-3 (FACTS) / HG-4 (HYPOTHESIS) を踏襲し、2 回同じ仮説で失敗したら別アプローチへ。
@@ -187,14 +210,15 @@ Phase 1 着手時に `~/.claude/skills/gatekeeper/SKILL.md` の HG-1 〜 HG-5 �
 
 ---
 
-## Phase 1.6 DoD (Definition of Done)
+## Phase 1.7 DoD (Definition of Done)
 
-1. 別 Mac / 別 iPhone の同構成で `install.sh` → `install-tier1.sh --apply` → `setup-caffeinate-launchd.sh --apply` → `verify-tier1.sh` が 15 分以内で 9/9 PASS する
-2. `doctor.sh` が 9 層すべてチェックできる
+1. 別 Mac / 別 iPhone の同構成で `install.sh` → `install-tier1.sh --apply` → `setup-caffeinate-launchd.sh --apply` → `setup-tailscale-watchdog.sh --apply` → `verify-tier1.sh` が 15 分以内で 11/11 PASS する
+2. `doctor.sh` が 11 層すべてチェックできる
 3. README.md QUICKSTART で初見エンジニア 1 人が詰まらずセットアップできる
 4. Mac 再起動後も LaunchAgent が自動復帰し、`pmset -g assertions` に `caffeinate asserting forever` が残っている
 5. Remote Login enabled — `verify-tier1.sh` 項目 7+8 PASS (sshd reachable on 127.0.0.1 and on Tailscale IPv4)
 6. mosh-server SSH-discoverable — `verify-tier1.sh` 項目 9 PASS (SSH command-exec resolves mosh-server via ~/.zshenv)
+7. Tailscale 常時接続 — `tailscale down` 状態から watchdog が 2 分以内に `BackendState=Running` へ自動復旧する (launchd 経由の実機検証必須。手動実行だけでは launchd 環境の GUI-mode 罠を検出できない)
 
 ---
 
@@ -209,11 +233,12 @@ Phase 1 着手時に `~/.claude/skills/gatekeeper/SKILL.md` の HG-1 〜 HG-5 �
 | `references/troubleshooting.md` | Troubleshoot モード + doctor.sh と対で |
 | `templates/tmux.conf.template` | Install (Mac) の tmux 設定生成時 |
 | `templates/com.mobile-dev-bridge.caffeinate.plist.template` | Install (caffeinate) の LaunchAgent 生成時 |
+| `templates/com.mobile-dev-bridge.tailscale-watchdog.plist.template` | Install (tailscale-watchdog) の LaunchAgent 生成時 |
 | `HANDOFF.md` | 次セッション開始時の最初 |
 | `CHANGELOG.md` | バージョン履歴確認時 |
 | `SECURITY.md` | 鍵漏洩 / サプライチェーン確認時 |
 
-Phase 1.6 スコープ外 (Phase 2 以降で追加):
+Phase 1.7 スコープ外 (Phase 2 以降で追加):
 
 - `references/claude-remote.md` (Phase 2)
 - `references/setup-tier2.md` (Phase 3, code-server)
@@ -222,7 +247,7 @@ Phase 1.6 スコープ外 (Phase 2 以降で追加):
 
 ---
 
-## Non-goals (Phase 1.6)
+## Non-goals (Phase 1.7)
 
 - Claude iOS app `remote-control` 連携 (Phase 2)
 - code-server セットアップ (Phase 3)

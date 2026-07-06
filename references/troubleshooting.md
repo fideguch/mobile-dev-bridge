@@ -1,4 +1,4 @@
-# Troubleshooting — 9-Layer Diagnostic
+# Troubleshooting — 11-Layer Diagnostic
 
 > `./scripts/doctor.sh` の出力とこのファイルを対で読むこと。
 > 2 回同じ仮説で失敗したら捨てること (gatekeeper HG-4)。
@@ -26,6 +26,27 @@ tailscale up --accept-dns
 
 - キャリアやカフェ Wi-Fi が UDP ブロックの可能性 → `references/setup-tier1.md` §10 の plain SSH フォールバック
 - Tailscale Admin Console で該当 exit-node 経由になっていないか確認
+
+### 症状: iPhone の Tailscale アプリで Mac が offline (灰色) に見える — Block E (sticky toggle-off)
+
+**2026-07-06 実障害**。caffeinate / sshd / mosh が全部 healthy でも、Mac 側の Tailscale トグルが OFF だと iPhone からは完全に不可視になる。macOS の Tailscale は接続状態 (`WantRunning`) を永続化するため、**一度 OFF になると再起動後も OFF のまま**。
+
+```bash
+# Mac 側での診断 (この 2 つで確定する)
+/Applications/Tailscale.app/Contents/MacOS/Tailscale status
+# → "Tailscale is stopped." なら Block E
+/Applications/Tailscale.app/Contents/MacOS/Tailscale debug prefs | grep -E 'WantRunning|LoggedOut'
+# → WantRunning: false, LoggedOut: false = トグル OFF (認証は生きている)
+# → LoggedOut: true = 再認証が必要 (watchdog では直らない、ブラウザで tailscale up)
+```
+
+| 状態 | 対処 |
+|---|---|
+| `WantRunning=false, LoggedOut=false` | `Tailscale up` で即復旧。恒久対策は watchdog: `./scripts/setup-tailscale-watchdog.sh --apply` (`references/setup-tier1.md` §12) |
+| `LoggedOut=true` | ターミナルで `tailscale up` → ブラウザ再認証。Admin Console で「Disable key expiry」にしておくと再発防止 |
+| watchdog 導入済みなのに再発 | `tail ~/Library/Logs/com.mobile-dev-bridge.tailscale-watchdog.log` を確認。`[NEEDS-HUMAN]` なら再認証、pause 中なら `--resume` |
+
+**iPhone 側の表示が stale の可能性もある**: Mac 側が正常 (`BackendState=Running`) なのに iPhone の一覧で offline に見える場合、iOS アプリが古い peer 状態をキャッシュしている。iOS 側で Tailscale アプリを強制終了→再起動し、Termius から直接接続を試してから Mac 側障害と判断すること。
 
 ---
 
@@ -76,6 +97,31 @@ sudo systemsetup -setremotelogin on    # FDA 必要、失敗時は GUI へ
 ```
 
 **macOS の launchd 仕様の罠**: macOS の sshd は launchd が on-demand で spawn するため、アイドル状態では `pgrep sshd` に出てこない。port 22 は実際に接続が来た時だけ開く。「sshd プロセスが見えない=落ちている」と早合点しないこと。判定は `nc -z 127.0.0.1 22` の方が正確。
+
+### 症状: 接続はできるが `ls ~/Desktop` 等が `Operation not permitted` — Block F (TCC)
+
+**2026-07-06 実障害**。iPhone から SSH/mosh 接続は成功するのに、`~/Desktop` / `~/Documents` / `~/Downloads` (iCloud Drive 等も) にアクセスすると `Operation not permitted`。ホーム直下や `~/mobile-dev-bridge` は読める。
+
+**根本原因**: macOS の TCC (プライバシー保護) が、リモートセッション (sshd 経由) に対して保護フォルダへのアクセスをデフォルト拒否する。接続自体は成功するため verify 項目 1-10 では検出できない (項目 11 が Phase 1.7 で追加された理由)。
+
+**修正 (GUI のみ)**:
+
+```
+System Settings → 一般 → 共有 → リモートログイン → ⓘ (情報ボタン)
+  → 「リモートユーザーにフルディスクアクセスを許可」= ON
+```
+
+その後 **iPhone 側で一度切断して再接続** (既存セッションには反映されない)。
+
+**検証**:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_mobile $(id -un)@127.0.0.1 'ls ~/Desktop'
+# 修正後はエラーなく一覧が出る
+./scripts/verify-tier1.sh   # 項目 11 PASS
+```
+
+セキュリティトレードオフと代替手段 (sshd-keygen-wrapper への個別 FDA 付与) は `references/setup-tier1.md` §11 参照。
 
 ---
 
