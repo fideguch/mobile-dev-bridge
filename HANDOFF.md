@@ -18,7 +18,8 @@
 - [x] docs 全層更新 (README ×2 / QUICKSTART / SKILL / setup-tier1 §11-13 / troubleshooting §L1・§L2 / install-tier1 advisory)
 - [x] **HG-5 (Mac 側)**: `Tailscale down` → watchdog 手動実行 → Running 復旧 / pause 中は Stopped 維持 / resume 後復旧 — 全パス実機 PASS
 - [x] **HG-5 (launchd 経由)**: LaunchAgent ロード後、`tailscale down` → 2 分以内に自動復旧するか (適用セッションで検証)
-- [ ] **HG-5 (iPhone 実機、次回外出時)**: iPhone Tailscale アプリで Mac が online 表示 → Termius 接続 → `ls ~/Documents` が通る (Block F の GUI トグル ON 後)
+- [x] **Block F GUI トグル ON 済 (2026-07-06)**: 「リモートユーザーにフルディスクアクセスを許可」= ON → `verify-tier1.sh` **11/11 PASS** (項目 11 の loopback TCC probe が PASS に転じたことを確認)
+- [ ] **HG-5 (iPhone 実機、次回接続時)**: Termius を一度切断→再接続 (TCC 反映は新規セッションから) → `ls ~/Documents` が通ることを確認
 
 ### 落とし穴 (このリリースで学んだこと — 再発防止のため必読)
 
