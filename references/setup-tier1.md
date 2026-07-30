@@ -74,7 +74,7 @@ MagicDNS ホスト名 (`macbook.tail-xxxxx.ts.net` 相当) は後で iPhone 側�
 1. Termius アプリを開く (未ログインなら無料でアカウント作成 or ログイン)
 2. `Hosts` タブ → `+` → `New Host`
 3. 入力内容:
-   - **Label**: `MacBook (client)` など
+   - **Label**: `MacBook (dev)` など
    - **Address**: Mac の MagicDNS ホスト名 (例: `macbook.tail-xxxxx.ts.net`)
    - **Port**: 22 (デフォルト)
    - **Username**: Mac のユーザー名 (`whoami` で確認)

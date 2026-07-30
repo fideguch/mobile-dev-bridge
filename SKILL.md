@@ -1,6 +1,6 @@
 ---
 name: mobile-dev-bridge
-description: iPhone/iPad から Mac の開発環境 (Tailscale + Termius + mosh + tmux + Claude Code CLI) に SSH 繋ぎ、client-dev 等のローカル開発を継続するためのセットアップ・検証・診断スキル。継続コスト $0。
+description: iPhone/iPad から Mac の開発環境 (Tailscale + Termius + mosh + tmux + Claude Code CLI) に SSH 繋ぎ、ローカル開発を継続するためのセットアップ・検証・診断スキル。継続コスト $0。
 triggers:
   - "スマホから開発"
   - "iPhone で Claude Code"
